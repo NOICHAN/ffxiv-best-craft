@@ -1,0 +1,9 @@
+# src-server 的語系→資料庫對應表。
+#
+# 每個語系需要一份獨立的資料庫，因為 Items 表只有單一個 Name 欄位
+# （見 src-db/src/items.rs），一份資料庫只裝得下一種語言。
+#
+# repo 內建的 xiv.db 是簡體中文，所以這裡只註冊得了 zh-CN。
+# 其他語系需要有對應的 FFXIV 遊戲本體，再用 src-data 匯出。
+[lang.zh-CN]
+database = "sqlite:/data/xiv.db?mode=ro"

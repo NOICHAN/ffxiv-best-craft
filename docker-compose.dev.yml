@@ -1,0 +1,90 @@
+# 本機開發環境。啟動：
+#   docker compose -f docker-compose.dev.yml up
+# 前端 http://localhost:5173  自架 API http://localhost:8080
+name: bestcraft-dev
+
+x-image: &image
+    build:
+        context: .
+        dockerfile: docker/Dockerfile.dev
+    image: bestcraft-dev:latest
+
+services:
+    # 前端：Vite dev server（含瀏覽器端的 wasm 求解核心）
+    web:
+        <<: *image
+        working_dir: /app
+        environment:
+            VITE_BESTCRAFT_TARGET: web
+            # bind mount 在 Windows 上收不到 inotify 事件，必須改用輪詢才有 hot reload
+            VITE_USE_POLLING: '1'
+            # 預設打線上 API（六語系，含繁體中文）。
+            # 想改用下面的 api container（僅簡體中文、可離線）就換成：
+            #   VITE_DATASOURCE_API_BASE=http://localhost:8080/
+            # 注意是 localhost 不是 api —— 發請求的是你主機上的瀏覽器，不是這個容器。
+            VITE_DATASOURCE_API_BASE: ${VITE_DATASOURCE_API_BASE:-https://tnze.yyyy.games/api/datasource/}
+        ports:
+            - '5173:5173'
+        volumes:
+            - .:/app
+            - node_modules:/app/node_modules
+            - pkg_wasm:/app/pkg-wasm
+            - pnpm_store:/pnpm-store
+            - cargo_registry:/usr/local/cargo/registry
+            - cargo_git:/usr/local/cargo/git
+            - cargo_target:/cargo-target
+        command:
+            - sh
+            - -c
+            - |
+                set -e
+                pnpm install --frozen-lockfile --store-dir /pnpm-store
+                if [ ! -f /app/pkg-wasm/app_wasm.js ]; then
+                  echo "==> 首次建置 wasm 模組，需要數分鐘，請耐心等候..."
+                  pnpm run predev-web
+                  echo "==> wasm 建置完成"
+                fi
+                exec pnpm exec vite dev --host 0.0.0.0 --port 5173
+
+    # 後端：Salvo HTTP API，資料來自唯讀掛載的 SQLite
+    api:
+        <<: *image
+        working_dir: /app
+        environment:
+            # 以 git CLI 取代 libgit2 抓取相依，處理 tag 釘選的 git 相依比較可靠
+            CARGO_NET_GIT_FETCH_WITH_CLI: 'true'
+        ports:
+            - '8080:8080'
+        volumes:
+            - .:/app
+            # 資料庫：桌面版內建的那份，唯讀掛進來，容器不會寫到它
+            - ./src-tauri/assets/xiv.db:/data/xiv.db:ro
+            # 這裡刻意不與 web 共用快取。cargo 防併行的鎖檔在 CARGO_HOME 根目錄，
+            # 那層在映像檔裡、每個容器各自一份；若只共用底下的 registry/ 與 git/，
+            # 等於鎖沒共用卻共用了被鎖保護的目錄，兩個容器同時解析相依會互相踩壞。
+            - cargo_registry_api:/usr/local/cargo/registry
+            - cargo_git_api:/usr/local/cargo/git
+            - cargo_target_api:/cargo-target
+        command:
+            - sh
+            - -c
+            - |
+                set -e
+                cargo build -p web-source-server
+                # main.rs 用 dotenvy::dotenv().unwrap() 與 read_to_string("config.toml")，
+                # 兩者都相對於工作目錄，所以要在放了這兩個檔的目錄下啟動。
+                cd /app/docker/server
+                exec /cargo-target/debug/web-source-server
+
+volumes:
+    node_modules:
+    pkg_wasm:
+    pnpm_store:
+    # web 用
+    cargo_registry:
+    cargo_git:
+    cargo_target:
+    # api 用（不與 web 共用，原因見 api service 的註解）
+    cargo_registry_api:
+    cargo_git_api:
+    cargo_target_api:

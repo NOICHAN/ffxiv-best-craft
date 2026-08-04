@@ -77,6 +77,11 @@ export default defineConfig({
             'Cross-Origin-Opener-Policy': 'same-origin',
             'Cross-Origin-Embedder-Policy': 'credentialless',
         },
+        // 容器內透過 bind mount 讀取 Windows 主機的檔案時收不到 inotify 事件，
+        // 得改用輪詢才有 hot reload。非容器環境不設此變數，維持原本的事件監看。
+        watch: process.env.VITE_USE_POLLING
+            ? { usePolling: true, interval: 300 }
+            : undefined,
     },
     build: {
         rollupOptions: {

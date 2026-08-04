@@ -1,0 +1,10 @@
+# Dockerfile.dev 不 COPY 任何東西（原始碼靠 bind mount），
+# 這裡純粹是避免把幾 GB 的產物送給 Docker daemon 當建置脈絡。
+.git
+node_modules
+dist
+dist-ssr
+pkg-wasm
+target
+src-*/target
+releases

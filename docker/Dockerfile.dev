@@ -1,0 +1,38 @@
+# 開發用共用映像檔：web 與 api 兩個 service 都跑這一顆。
+# 只裝工具鏈，不 COPY 原始碼 —— 原始碼一律靠 bind mount 進來，
+# 這樣改檔案不需要重建映像檔。
+FROM node:24-bookworm-slim
+
+# build-essential / pkg-config / libssl-dev 是編 Rust 原生相依所需
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        build-essential \
+        ca-certificates \
+        curl \
+        git \
+        libssl-dev \
+        pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV RUSTUP_HOME=/usr/local/rustup \
+    CARGO_HOME=/usr/local/cargo \
+    CARGO_TARGET_DIR=/cargo-target \
+    PATH=/usr/local/cargo/bin:$PATH
+
+# 專案的 rust-toolchain 指定 nightly。
+# rust-src 是 -Z build-std 必需的元件，wasm32 target 給 wasm-pack 用。
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+    | sh -s -- -y \
+        --profile minimal \
+        --default-toolchain nightly \
+        --component rust-src \
+        --target wasm32-unknown-unknown
+
+# 版本必須與 Cargo.lock 裡的 wasm-bindgen 一致，否則 wasm-pack 會拒絕產出
+RUN cargo install wasm-bindgen-cli --version 0.2.126 --locked
+
+RUN curl -sSf https://rustwasm.github.io/wasm-pack/installer/init.sh | sh
+
+RUN corepack enable
+
+WORKDIR /app

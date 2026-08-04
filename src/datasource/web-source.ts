@@ -270,4 +270,8 @@ export class WebSource {
     }
 }
 
-export const YYYYGamesApiBase = 'https://tnze.yyyy.games/api/datasource/';
+// 預設指向官方公開資料源；設了 VITE_DATASOURCE_API_BASE 就改打自架的 src-server。
+// 未設定時行為與原本完全相同，正式版建置不受影響。
+export const YYYYGamesApiBase =
+    import.meta.env.VITE_DATASOURCE_API_BASE ??
+    'https://tnze.yyyy.games/api/datasource/';
