@@ -393,7 +393,6 @@ watchEffect(async () => {
 .main {
     height: 100%;
     padding: 0 0 0 10px;
-    /* background-color: rgba(246, 246, 246, 0.5); */
     background-color: var(--tnze-mica-bg-color);
     flex: auto;
 

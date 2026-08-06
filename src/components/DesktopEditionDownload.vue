@@ -438,7 +438,7 @@ const url = computed(() => {
         }
 
         &.selected {
-            color: #fff;
+            color: var(--el-bg-color);
         }
 
         &:disabled {

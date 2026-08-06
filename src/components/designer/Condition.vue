@@ -101,7 +101,7 @@ const dark = useDark();
 
 .centered {
     color: yellow;
-    text-shadow: 0px 0px 10px #393939;
+    text-shadow: 0px 0px 10px var(--tnze-bar-track);
 }
 
 .centered.dark {

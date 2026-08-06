@@ -212,7 +212,7 @@ const color = d3
         'high_collectability',
     ])
     .range(d3.schemeSpectral[9])
-    .unknown('#ccc');
+    .unknown('var(--el-border-color)');
 
 const arcs = computed(() => {
     const statistics = simulationResult.value;

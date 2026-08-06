@@ -101,7 +101,7 @@ const highMark = computed(() =>
             </g>
         </defs>
         <g :transform="`translate(${marginLeft},0)`">
-            <g stroke="black">
+            <g stroke="var(--tnze-bar-outline)">
                 <rect y="5" :width="midMark" height="4" :fill="palette[0]" />
                 <rect
                     v-if="midMark"
@@ -120,7 +120,7 @@ const highMark = computed(() =>
                     :fill="palette[2]"
                 />
             </g>
-            <g stroke="black">
+            <g stroke="var(--tnze-bar-outline)">
                 <use xlink:href="#Mark" :fill="palette[0]" />
                 <use
                     v-if="midMark"
