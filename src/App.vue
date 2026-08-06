@@ -173,16 +173,15 @@ watchEffect(async () => {
         // Ask the rust side if the window transparent.
         shouldBeTransparent = await invoke('set_theme', { isDark });
     }
+    // 主題分歧交給 CSS：--el-bg-color / --el-bg-color-page 已隨 html.dark 切換。
+    // 若在此用 isDark 三元判斷，colorMode 為 'auto' 時 isDark 是 null，
+    // 會固定拿到淺色值，但 html.dark 仍會掛上，導致側邊欄文字幾乎不可見。
     if (shouldBeTransparent) {
         bgMicaColor.value = 'transparent';
-        bgColor.value = isDark
-            ? 'var(--tnze-mica-opaque-dark)'
-            : 'var(--tnze-mica-opaque-light)';
+        bgColor.value = 'var(--el-bg-color)';
     } else {
         bgMicaColor.value = 'var(--el-bg-color)';
-        bgColor.value = isDark
-            ? 'var(--tnze-app-bg-dark)'
-            : 'var(--tnze-app-bg-light)';
+        bgColor.value = 'var(--el-bg-color-page)';
     }
 });
 </script>

@@ -15,7 +15,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-:root {
+/* 選擇器刻意寫成 :root:root（特異性 0,2,0）／:root:root.dark（0,3,0），
+   目的是穩定壓過 Element Plus 的 :root（0,1,0）與 html.dark（0,1,1），
+   使本檔不再依賴 CSS 載入順序；兩個區塊彼此的勝負則由本檔內的先後決定。 */
+:root:root {
     --el-bg-color-page: #f7f8fa;
     --el-bg-color: #ffffff;
     --el-text-color-primary: #1c1e21;
@@ -30,6 +33,13 @@
     --el-color-info: #53555a;
     --el-border-color: #8b9098;
 
+    /* 邊框層級：--el-border-color 已經是「對白底達 3:1」的下限，
+       更淺的三個變體（表格格線、卡片外框、分隔線）沒有可用的空間，
+       只能一併對齊 --el-border-color。犧牲視覺層級，換取格線可見。 */
+    --el-border-color-light: var(--el-border-color);
+    --el-border-color-lighter: var(--el-border-color);
+    --el-border-color-extra-light: var(--el-border-color);
+
     /* 語意條：軌道與描邊 */
     --tnze-bar-track: #3a3f45;
     --tnze-bar-outline: #8b9098;
@@ -41,15 +51,24 @@
     --tnze-fill-danger: #f67979;
     --tnze-fill-info: #9d9fa4;
     --tnze-on-fill: #10131a;
+    /* 停用態填色：去飽和的灰，同樣配 --tnze-on-fill；
+       兩套主題共用一組，靠「鮮豔 vs 灰」而非明暗來表達停用。 */
+    --tnze-fill-disabled: #d5d8dc;
 
-    /* 頁面底色，供 App.vue 的 Mica 背景邏輯取用 */
-    --tnze-app-bg-light: #f7f8fa;
-    --tnze-app-bg-dark: #0e1013;
-    --tnze-mica-opaque-light: #ffffff;
-    --tnze-mica-opaque-dark: #191c20;
+    /* 製作狀態圖示色：一律畫在固定底座 --tnze-bar-track 上（見 D8），
+       因此兩套主題共用一組；色相全部保留自原本的 CSS 具名色。 */
+    --tnze-cond-red: #ff3b3b; /* red */
+    --tnze-cond-gray: #898989; /* black */
+    --tnze-cond-yellow: #ffff00; /* yellow */
+    --tnze-cond-blue: #bdbdff; /* blue */
+    --tnze-cond-green: #009f00; /* green */
+    --tnze-cond-navy: #7979ff; /* darkblue */
+    --tnze-cond-purple: #f000f0; /* purple */
+    --tnze-cond-pink: #ffc0cb; /* pink */
+    --tnze-cond-skyblue: #add8e6; /* lightblue */
 }
 
-html.dark {
+:root:root.dark {
     --el-bg-color-page: #0e1013;
     --el-bg-color: #191c20;
     --el-text-color-primary: #f2f4f6;
@@ -67,40 +86,211 @@ html.dark {
     --tnze-bar-outline: #9aa1aa;
 }
 
+/* ───────── 元件層 ─────────
+   選擇器一律加上 :root 前綴（並以 :not() 排除非實心變體），
+   讓特異性穩定高於 Element Plus 自身的規則，不依賴載入順序。 */
+
+/* 預設（無 type）按鈕：hover 邊框原本指向 --el-color-primary-light-7，
+   對白底只有 1.3:1，等同 hover 時邊框消失；改回已驗證的 --el-border-color。
+   hover 文字原本是 --el-color-primary，落在 light-9 底色上只有 6.8:1，
+   改用 --el-text-color-primary。focus ring 原本是 light-5，對白底 1.6:1。 */
+:root .el-button:not(.is-plain):not(.is-text):not(.is-link):not(.is-dashed) {
+    --el-button-hover-border-color: var(--el-border-color);
+    --el-button-hover-text-color: var(--el-text-color-primary);
+    --el-button-outline-color: var(--el-color-primary);
+}
+
 /* 實心按鈕：鮮豔填色 + 深色文字；邊界由 1px 邊框負責，
-   因為「配深字達 7:1」與「對白底達 3:1」在數學上互斥 */
-.el-button--primary {
+   因為「配深字達 7:1」與「對白底達 3:1」在數學上互斥。
+   hover/active 沿用同一個填色，避免落到 EP 由舊主色推導的 light-3/dark-2。 */
+:root
+    .el-button--primary:not(.is-plain):not(.is-text):not(.is-link):not(
+        .is-dashed
+    ) {
     --el-button-bg-color: var(--tnze-fill-primary);
     --el-button-text-color: var(--tnze-on-fill);
     --el-button-border-color: var(--el-border-color);
     --el-button-hover-text-color: var(--tnze-on-fill);
+    --el-button-hover-bg-color: var(--tnze-fill-primary);
+    --el-button-hover-border-color: var(--el-border-color);
     --el-button-active-text-color: var(--tnze-on-fill);
+    --el-button-active-bg-color: var(--tnze-fill-primary);
+    --el-button-active-border-color: var(--el-border-color);
+    --el-button-outline-color: var(--el-color-primary);
+    --el-button-disabled-text-color: var(--tnze-on-fill);
+    --el-button-disabled-bg-color: var(--tnze-fill-disabled);
+    --el-button-disabled-border-color: var(--el-border-color);
 }
-.el-button--success {
+:root
+    .el-button--success:not(.is-plain):not(.is-text):not(.is-link):not(
+        .is-dashed
+    ) {
     --el-button-bg-color: var(--tnze-fill-success);
     --el-button-text-color: var(--tnze-on-fill);
     --el-button-border-color: var(--el-border-color);
     --el-button-hover-text-color: var(--tnze-on-fill);
+    --el-button-hover-bg-color: var(--tnze-fill-success);
+    --el-button-hover-border-color: var(--el-border-color);
     --el-button-active-text-color: var(--tnze-on-fill);
+    --el-button-active-bg-color: var(--tnze-fill-success);
+    --el-button-active-border-color: var(--el-border-color);
+    --el-button-outline-color: var(--el-color-success);
+    --el-button-disabled-text-color: var(--tnze-on-fill);
+    --el-button-disabled-bg-color: var(--tnze-fill-disabled);
+    --el-button-disabled-border-color: var(--el-border-color);
 }
-.el-button--warning {
+:root
+    .el-button--warning:not(.is-plain):not(.is-text):not(.is-link):not(
+        .is-dashed
+    ) {
     --el-button-bg-color: var(--tnze-fill-warning);
     --el-button-text-color: var(--tnze-on-fill);
     --el-button-border-color: var(--el-border-color);
     --el-button-hover-text-color: var(--tnze-on-fill);
+    --el-button-hover-bg-color: var(--tnze-fill-warning);
+    --el-button-hover-border-color: var(--el-border-color);
     --el-button-active-text-color: var(--tnze-on-fill);
+    --el-button-active-bg-color: var(--tnze-fill-warning);
+    --el-button-active-border-color: var(--el-border-color);
+    --el-button-outline-color: var(--el-color-warning);
+    --el-button-disabled-text-color: var(--tnze-on-fill);
+    --el-button-disabled-bg-color: var(--tnze-fill-disabled);
+    --el-button-disabled-border-color: var(--el-border-color);
 }
-.el-button--danger {
+:root
+    .el-button--danger:not(.is-plain):not(.is-text):not(.is-link):not(
+        .is-dashed
+    ) {
     --el-button-bg-color: var(--tnze-fill-danger);
     --el-button-text-color: var(--tnze-on-fill);
     --el-button-border-color: var(--el-border-color);
     --el-button-hover-text-color: var(--tnze-on-fill);
+    --el-button-hover-bg-color: var(--tnze-fill-danger);
+    --el-button-hover-border-color: var(--el-border-color);
     --el-button-active-text-color: var(--tnze-on-fill);
+    --el-button-active-bg-color: var(--tnze-fill-danger);
+    --el-button-active-border-color: var(--el-border-color);
+    --el-button-outline-color: var(--el-color-danger);
+    --el-button-disabled-text-color: var(--tnze-on-fill);
+    --el-button-disabled-bg-color: var(--tnze-fill-disabled);
+    --el-button-disabled-border-color: var(--el-border-color);
 }
-.el-button--info {
+:root
+    .el-button--info:not(.is-plain):not(.is-text):not(.is-link):not(
+        .is-dashed
+    ) {
     --el-button-bg-color: var(--tnze-fill-info);
     --el-button-text-color: var(--tnze-on-fill);
     --el-button-border-color: var(--el-border-color);
     --el-button-hover-text-color: var(--tnze-on-fill);
+    --el-button-hover-bg-color: var(--tnze-fill-info);
+    --el-button-hover-border-color: var(--el-border-color);
     --el-button-active-text-color: var(--tnze-on-fill);
+    --el-button-active-bg-color: var(--tnze-fill-info);
+    --el-button-active-border-color: var(--el-border-color);
+    --el-button-outline-color: var(--el-color-info);
+    --el-button-disabled-text-color: var(--tnze-on-fill);
+    --el-button-disabled-bg-color: var(--tnze-fill-disabled);
+    --el-button-disabled-border-color: var(--el-border-color);
+}
+
+/* 實心按鈕的 hover / active 回饋：只提亮填色。
+   提亮只會拉開與深色文字的對比（7:1 → 更高），不會讓任何組合退步。 */
+:root
+    .el-button--primary:not(.is-plain):not(.is-text):not(.is-link):not(
+        .is-dashed
+    ):not(.is-disabled):hover,
+:root
+    .el-button--success:not(.is-plain):not(.is-text):not(.is-link):not(
+        .is-dashed
+    ):not(.is-disabled):hover,
+:root
+    .el-button--warning:not(.is-plain):not(.is-text):not(.is-link):not(
+        .is-dashed
+    ):not(.is-disabled):hover,
+:root
+    .el-button--danger:not(.is-plain):not(.is-text):not(.is-link):not(
+        .is-dashed
+    ):not(.is-disabled):hover,
+:root
+    .el-button--info:not(.is-plain):not(.is-text):not(.is-link):not(
+        .is-dashed
+    ):not(.is-disabled):hover {
+    filter: brightness(1.1);
+}
+:root
+    .el-button--primary:not(.is-plain):not(.is-text):not(.is-link):not(
+        .is-dashed
+    ):not(.is-disabled):active,
+:root
+    .el-button--success:not(.is-plain):not(.is-text):not(.is-link):not(
+        .is-dashed
+    ):not(.is-disabled):active,
+:root
+    .el-button--warning:not(.is-plain):not(.is-text):not(.is-link):not(
+        .is-dashed
+    ):not(.is-disabled):active,
+:root
+    .el-button--danger:not(.is-plain):not(.is-text):not(.is-link):not(
+        .is-dashed
+    ):not(.is-disabled):active,
+:root
+    .el-button--info:not(.is-plain):not(.is-text):not(.is-link):not(
+        .is-dashed
+    ):not(.is-disabled):active {
+    filter: brightness(1.2);
+}
+
+/* 以下元件把 --el-color-* 當填色用、其上文字硬寫 --el-color-white，
+   在深色主題把主色調亮後反而退步；一律改用填色角色 + --tnze-on-fill。 */
+:root .el-radio-button {
+    --el-radio-button-checked-bg-color: var(--tnze-fill-primary);
+    --el-radio-button-checked-text-color: var(--tnze-on-fill);
+    --el-radio-button-checked-border-color: var(--el-border-color);
+    --el-radio-button-disabled-checked-fill: var(--tnze-fill-disabled);
+}
+
+:root .el-segmented {
+    --el-segmented-item-selected-bg-color: var(--tnze-fill-primary);
+    --el-segmented-item-selected-color: var(--tnze-on-fill);
+    --el-segmented-item-selected-disabled-bg-color: var(--tnze-fill-disabled);
+}
+
+:root .el-checkbox {
+    --el-checkbox-checked-bg-color: var(--tnze-fill-primary);
+    --el-checkbox-checked-icon-color: var(--tnze-on-fill);
+}
+
+/* el-badge 沒有 --el-badge-text-color；文字色寫死在 .el-badge__content 上，
+   各 type 的底色也是直接寫 background-color，只好逐一覆寫。 */
+:root .el-badge {
+    --el-badge-bg-color: var(--tnze-fill-danger);
+}
+:root .el-badge__content {
+    color: var(--tnze-on-fill);
+}
+:root .el-badge__content--primary {
+    background-color: var(--tnze-fill-primary);
+}
+:root .el-badge__content--success {
+    background-color: var(--tnze-fill-success);
+}
+:root .el-badge__content--warning {
+    background-color: var(--tnze-fill-warning);
+}
+:root .el-badge__content--info {
+    background-color: var(--tnze-fill-info);
+}
+:root .el-badge__content--danger {
+    background-color: var(--tnze-fill-danger);
+}
+
+/* 分頁器選中頁：EP 直接寫 background-color/color，沒有變數可換。
+   這條與 EP 的選擇器特異性完全相同（0,4,1），仍是平手＝依賴順序，
+   故一樣補上 :root 前綴。 */
+:root .el-pagination.is-background .el-pager li.is-active,
+:root .el-pagination.is-background .btn-prev.is-active,
+:root .el-pagination.is-background .btn-next.is-active {
+    background-color: var(--tnze-fill-primary);
+    color: var(--tnze-on-fill);
 }
