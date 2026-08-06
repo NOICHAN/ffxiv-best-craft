@@ -68,7 +68,7 @@ const color = computed(() => {
                 </clipPath>
             </defs>
             <g
-                :stroke="'var(--tnze-bar-outline)'"
+                stroke="var(--tnze-bar-outline)"
                 stroke-linecap="round"
                 transform="translate(1.5, 1.5)"
             >

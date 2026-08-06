@@ -40,6 +40,12 @@ const dark = useDark();
     font-size: x-large;
     vertical-align: middle;
     /* vertical-align: baseline; */
+
+    /* 底座的幾何先在這裡定好（邊框透明），讓 normal 與其他狀態切換時
+       不會因為多出邊框與內距而位移 */
+    padding: 0 8px;
+    border: 1px solid transparent;
+    border-radius: var(--el-border-radius-round);
 }
 
 #text {
@@ -52,84 +58,98 @@ const dark = useDark();
     color: var(--el-text-color-primary);
 } */
 
+/* 遊戲製作狀態是語意色，色相必須保留，但 red/black/blue/darkblue/purple…
+   這些 CSS 具名色在深色底上最低只有 1.06:1。比照 D8 的做法，把圖示畫在
+   固定底座 --tnze-bar-track 上並以 --tnze-bar-outline 描邊：底座對兩套
+   主題的表面都由描邊負責 3:1，狀態色只要對底座達 3:1 即可，因此深淺兩套
+   主題可以共用同一組色（token 見 theme.css 的 --tnze-cond-*）。 */
+#icon.good,
+#icon.excellent,
+#icon.poor,
+#icon.centered,
+#icon.sturdy,
+#icon.pliant,
+#icon.malleable,
+#icon.primed,
+#icon.goodomen,
+#icon.robust {
+    background-color: var(--tnze-bar-track);
+    border-color: var(--tnze-bar-outline);
+}
+
 .good {
-    color: red;
+    color: var(--tnze-cond-red);
 }
 
 .excellent {
-    color: red;
+    color: var(--tnze-cond-red);
     animation: excellent-color 1s infinite;
 }
 
 @keyframes excellent-color {
     0% {
-        color: black;
+        color: var(--tnze-cond-gray);
     }
 
     12% {
-        color: red;
+        color: var(--tnze-cond-red);
     }
 
     24% {
-        color: black;
+        color: var(--tnze-cond-gray);
     }
 
     36% {
-        color: yellow;
+        color: var(--tnze-cond-yellow);
     }
 
     48% {
-        color: blue;
+        color: var(--tnze-cond-blue);
     }
 
     60% {
-        color: green;
+        color: var(--tnze-cond-green);
     }
 
     72% {
-        color: darkblue;
+        color: var(--tnze-cond-navy);
     }
 
     100% {
-        color: purple;
+        color: var(--tnze-cond-purple);
     }
 }
 
 .poor {
-    color: black;
+    color: var(--tnze-cond-gray);
 }
 
 .centered {
-    color: yellow;
-    text-shadow: 0px 0px 10px var(--tnze-bar-track);
-}
-
-.centered.dark {
-    color: yellow;
+    color: var(--tnze-cond-yellow);
 }
 
 .sturdy {
-    color: blue;
+    color: var(--tnze-cond-blue);
 }
 
 .pliant {
-    color: green;
+    color: var(--tnze-cond-green);
 }
 
 .malleable {
-    color: darkblue;
+    color: var(--tnze-cond-navy);
 }
 
 .primed {
-    color: purple;
+    color: var(--tnze-cond-purple);
 }
 
 .goodomen {
-    color: pink;
+    color: var(--tnze-cond-pink);
 }
 
 .robust {
-    color: lightblue;
+    color: var(--tnze-cond-skyblue);
 }
 </style>
 

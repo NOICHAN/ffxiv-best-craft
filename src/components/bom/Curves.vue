@@ -92,7 +92,6 @@ defineExpose({});
     bottom: 0;
     pointer-events: none;
 
-    /* background-color: var(--tnze-fill-primary); */
     /* border: 1px solid blue; */
     overflow: hidden;
 }

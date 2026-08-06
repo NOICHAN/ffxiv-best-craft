@@ -96,7 +96,7 @@ const highMark = computed(() =>
                     width="2.5"
                     height="2.5"
                     transform="translate(0,14) rotate(45)"
-                    fill="black"
+                    fill="var(--tnze-on-fill)"
                 />
             </g>
         </defs>

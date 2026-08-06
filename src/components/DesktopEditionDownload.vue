@@ -409,7 +409,7 @@ const url = computed(() => {
         top: 3px;
         bottom: 3px;
         left: 3px;
-        background: var(--el-color-primary);
+        background: var(--tnze-fill-primary);
         border-radius: 4px;
         transition:
             transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
@@ -438,7 +438,7 @@ const url = computed(() => {
         }
 
         &.selected {
-            color: var(--el-bg-color);
+            color: var(--tnze-on-fill);
         }
 
         &:disabled {

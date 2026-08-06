@@ -274,7 +274,7 @@ const arcLabel = d3
                             v-for="d in arcs"
                             :d="arc(d) ?? undefined"
                             :fill="color(d.data[0]) as string"
-                            stroke="white"
+                            stroke="var(--el-bg-color)"
                         >
                             <title>{{ $t(d.data[0]) + '×' + d.data[1] }}</title>
                         </path>
