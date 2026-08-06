@@ -30,9 +30,16 @@ import {
     ElSelect,
     ElOption,
     ElInputNumber,
+    ElTooltip,
+    ElIcon,
 } from 'element-plus';
 import type { TableColumnCtx } from 'element-plus';
-import { EditPen, Star, StarFilled } from '@element-plus/icons-vue';
+import {
+    EditPen,
+    QuestionFilled,
+    Star,
+    StarFilled,
+} from '@element-plus/icons-vue';
 import {
     CollectablesShopRefine,
     Item,
@@ -45,11 +52,18 @@ import { useRouter } from 'vue-router';
 import { useFluent } from 'fluent-vue';
 import { CraftType, DataSource, DataSourceType } from '@/datasource/source';
 import useSettingsStore from '@/stores/settings';
-import { useMediaQuery } from '@vueuse/core';
+import { refDebounced, useMediaQuery } from '@vueuse/core';
 import ConfirmDialog from './ConfirmDialog.vue';
 import useRecipeFavoritesStore from '@/stores/recipe-favorites';
 
 const searchingDelayMs = 200;
+// 同步等級輸入的防抖時間。打「90」會依序產生 9 → 90 兩個值，若不防抖，
+// 每一輪都會先把等級同步配方那幾列清成「—」再填回，打字時該欄會閃爍。
+const syncLevelDelayMs = 250;
+// 難度查詢的併發上限。一頁最多 200 列，不同 rlv 可能有數十個，
+// 若一次全部發出會瞬間對資料來源打出數十個請求（遠端來源沒有 Cache-Control，
+// 瀏覽器 HTTP 快取幫不上忙）。限制同時在途的請求數量以免壓垮資料來源。
+const maxConcurrentRequests = 6;
 
 // 配方等級表快取。rlv 表是靜態不變的資料（同一個 rlv 永遠對應同一張表），
 // 因此可以無限期快取。刻意放在「模組層級」而非元件層級，讓跨頁、
@@ -57,9 +71,14 @@ const searchingDelayMs = 200;
 // 請求（recipeTablePageSize 預設 100、上限 200），而兩個 DataSource 實作
 // 都沒有自己的快取（web-source 直接 fetch、local-source 直接 invoke）。
 // 存的是 Promise 而非結果，順便讓「同一個 key 的併發查詢」共用同一次請求。
-const recipeLevelCache = new Map<number, Promise<RecipeLevel>>();
+//
+// key 由「資料來源 + 語系 + rlv（或 job level）」組成：不同來源（本地 SQLite／
+// 遠端 API）可能對應不同的遊戲版本，只用 rlv 當 key 會在切換來源後沿用過期難度。
+// 把來源併進 key 之後，切換來源自然就查不到舊快取，不需要另外掛一個清空用的
+// watch——那種寫法能生效是靠 watch 的註冊順序，是會被日後改動靜默弄壞的隱性耦合。
+const recipeLevelCache = new Map<string, Promise<RecipeLevel>>();
 const recipeLevelByJobLevelCache = new Map<
-    number,
+    string,
     Promise<RecipeLevel | null>
 >();
 
@@ -67,13 +86,15 @@ const recipeLevelByJobLevelCache = new Map<
 // 避免失敗結果被永久快取而卡死後續查詢。
 function cachedRecipeLevelTable(
     ds: DataSource,
+    cacheScope: string,
     rlv: number,
 ): Promise<RecipeLevel> {
-    let cached = recipeLevelCache.get(rlv);
+    const key = `${cacheScope}|${rlv}`;
+    let cached = recipeLevelCache.get(key);
     if (cached == undefined) {
         cached = ds.recipeLevelTable(rlv);
-        cached.catch(() => recipeLevelCache.delete(rlv));
-        recipeLevelCache.set(rlv, cached);
+        cached.catch(() => recipeLevelCache.delete(key));
+        recipeLevelCache.set(key, cached);
     }
     return cached;
 }
@@ -82,15 +103,45 @@ function cachedRecipeLevelTable(
 // 呼叫端必須先 feature-detect ds.recipeLevelTablebyJobLevel 再進來。
 function cachedRecipeLevelTableByJobLevel(
     fetchTable: (jobLevel: number) => Promise<RecipeLevel | null>,
+    cacheScope: string,
     jobLevel: number,
 ): Promise<RecipeLevel | null> {
-    let cached = recipeLevelByJobLevelCache.get(jobLevel);
+    const key = `${cacheScope}|${jobLevel}`;
+    let cached = recipeLevelByJobLevelCache.get(key);
     if (cached == undefined) {
         cached = fetchTable(jobLevel);
-        cached.catch(() => recipeLevelByJobLevelCache.delete(jobLevel));
-        recipeLevelByJobLevelCache.set(jobLevel, cached);
+        cached.catch(() => recipeLevelByJobLevelCache.delete(key));
+        recipeLevelByJobLevelCache.set(key, cached);
     }
     return cached;
+}
+
+// 以固定數量的 worker 消耗任務佇列，限制同時在途的任務數。
+// shouldStop 會在每次取用下一個任務之前檢查一次：這一批已經過期時（例如使用者
+// 又換了頁）就不再送出剩下的請求，已在途的那幾個則讓它們自然結束
+// （DataSource 介面不接受 AbortSignal，取消不了底層請求）。
+// 未執行到的項目在結果陣列中留為 undefined。
+async function mapWithConcurrencyLimit<T, R>(
+    items: T[],
+    limit: number,
+    shouldStop: () => boolean,
+    task: (item: T) => Promise<R>,
+): Promise<(R | undefined)[]> {
+    const results = new Array<R | undefined>(items.length);
+    let nextIndex = 0;
+    const runWorker = async () => {
+        while (nextIndex < items.length) {
+            if (shouldStop()) return;
+            const index = nextIndex++;
+            results[index] = await task(items[index]);
+        }
+    };
+    const workers = [];
+    for (let i = 0; i < Math.min(limit, items.length); i++) {
+        workers.push(runWorker());
+    }
+    await Promise.all(workers);
+    return results;
 }
 
 const settingStore = useSettingsStore();
@@ -111,10 +162,18 @@ const craftTypeOptions = ref<CraftType[]>([]);
 const filterRecipeLevel = ref<number>();
 const stellarSteadyHandCount = ref<number>(0);
 // 等級同步：月球（宇宙探索）配方的難度取決於此值，未填時該類配方的難度欄顯示為「—」
-// 此控制項不觸發搜尋，只影響難度欄的顯示
-const syncLevel = ref<number>();
-// 難度對照表：key 為配方 id，value 為算好的難度；查不到的列在畫面上顯示「—」
+// 此控制項不觸發搜尋，只影響難度欄的顯示。
+// 型別含 null：el-input-number 清空時依 valueOnClear 預設回傳 null 而非 undefined，
+// 因此下游一律用鬆散的 `== undefined`（同時涵蓋 null 與 undefined）判斷「未填」。
+const syncLevel = ref<number | null>();
+// 難度查詢用的是防抖後的值，避免打字過程中每一個中間值都觸發一輪查詢。
+// 帶進 ConfirmDialog 的仍是未防抖的 syncLevel（點進配方時早已停止輸入）。
+const debouncedSyncLevel = refDebounced(syncLevel, syncLevelDelayMs);
+// 難度對照表：key 為配方 id，value 為算好的難度；查不到的列在畫面上顯示「—」或「…」
 const difficultyMap = ref<Map<number, number>>(new Map());
+// 難度是否正在載入。用來區分「還沒算完」（顯示「…」）與「算完了但沒有值」
+// （未填同步等級／查詢失敗，顯示「—」）——兩者都缺值，但意義完全不同。
+const isDifficultyLoading = ref(false);
 // 遞增的請求序號，用來丟棄過期結果（快速切換分頁／篩選／同步等級時，
 // 舊查詢可能晚於新查詢返回，只有最後發出的那次才能寫回 difficultyMap）
 let difficultyRequestId = 0;
@@ -241,9 +300,15 @@ function isDynamicRecipe(row: RecipeInfo): boolean {
 // 難度一律交給 @/libs/Craft 的 newRecipe 換算（純算術、無 wasm），不自行複製公式。
 async function loadDifficulties(
     rows: RecipeInfo[],
-    syncLv: number | undefined,
+    syncLv: number | null | undefined,
 ) {
     const requestId = ++difficultyRequestId;
+    // 這一批是否已經過期（有更新的一批被發出）。過期後就不該再送出剩下的請求。
+    const isStale = () => requestId != difficultyRequestId;
+    // 在任何 await 之前取快照：快取 key 必須對應「觸發這一批時」的資料來源，
+    // 中途切換來源會產生新的一批，由那一批用新的 scope 重查。
+    const cacheScope = `${settingStore.dataSource}|${settingStore.dataSourceLang}`;
+    isDifficultyLoading.value = true;
     const dynRows = rows.filter(isDynamicRecipe);
     const staticRows = rows.filter(row => !isDynamicRecipe(row));
 
@@ -273,6 +338,7 @@ async function loadDifficulties(
             try {
                 const rlv = await cachedRecipeLevelTableByJobLevel(
                     fetchTable.bind(ds),
+                    cacheScope,
                     syncLv,
                 );
                 if (rlv == null) return;
@@ -292,15 +358,19 @@ async function loadDifficulties(
         })();
 
         // 一般配方：依 rlv 去重，同一個 rlv 的所有列共用同一次查詢；
-        // 再經由 cachedRecipeLevelTable 走跨頁快取，換頁時通常一次請求都不用發
+        // 再經由 cachedRecipeLevelTable 走跨頁快取，換頁時通常一次請求都不用發。
+        // 即使如此，冷啟動時一頁仍可能有數十個未快取的 rlv，故加上併發上限。
         const uniqueRlvs = [...new Set(staticRows.map(row => row.rlv))];
         const staticTask = (async () => {
-            const entries = await Promise.all(
-                uniqueRlvs.map(async rlv => {
+            const entries = await mapWithConcurrencyLimit(
+                uniqueRlvs,
+                maxConcurrentRequests,
+                isStale,
+                async rlv => {
                     try {
                         return [
                             rlv,
-                            await cachedRecipeLevelTable(ds, rlv),
+                            await cachedRecipeLevelTable(ds, cacheScope, rlv),
                         ] as const;
                     } catch (e: any) {
                         console.error(
@@ -309,9 +379,14 @@ async function loadDifficulties(
                         );
                         return [rlv, undefined] as const;
                     }
-                }),
+                },
             );
-            const tables = new Map(entries);
+            const tables = new Map<number, RecipeLevel | undefined>();
+            for (const entry of entries) {
+                // 這一批中途過期時，未執行到的項目為 undefined
+                if (entry == undefined) continue;
+                tables.set(entry[0], entry[1]);
+            }
             for (const row of staticRows) {
                 const rlv = tables.get(row.rlv);
                 if (rlv == undefined) continue;
@@ -329,27 +404,18 @@ async function loadDifficulties(
     } catch (e: any) {
         console.error('Failed to load recipe difficulties', e);
     }
-    // 只有最後一次發出的請求能寫回結果，避免過期結果蓋掉新資料
-    if (requestId == difficultyRequestId) {
+    // 只有最後一次發出的請求能寫回結果，避免過期結果蓋掉新資料。
+    // 載入狀態同理：過期的那一批不能把 loading 關掉，否則畫面會在還有查詢
+    // 在跑的時候先顯示「—」，之後又跳出數字。
+    if (!isStale()) {
         difficultyMap.value = next;
+        isDifficultyLoading.value = false;
     }
 }
 
-watch([displayTable, syncLevel], ([rows, syncLv]) => {
+watch([displayTable, debouncedSyncLevel], ([rows, syncLv]) => {
     loadDifficulties(rows, syncLv);
 });
-
-// 切換資料來源／語系時清空配方等級表快取：不同來源（本地 SQLite／遠端 API）
-// 可能對應不同的遊戲版本，沿用舊快取會顯示過期的難度。
-// 此 watch 註冊在上面那個「切換資料來源就重新搜尋」的 watch 之後，
-// 但 triggerSearch 在第一個 await 就讓出，所以清空必定發生在新的查詢實際發出之前。
-watch(
-    () => [settingStore.dataSource, settingStore.dataSourceLang],
-    () => {
-        recipeLevelCache.clear();
-        recipeLevelByJobLevelCache.clear();
-    },
-);
 
 const confirmDialogVisible = ref(false);
 const recipe = ref<Recipe>();
@@ -529,7 +595,25 @@ function toggleRecipeFavorite(row: RecipeInfo) {
                     注意：ConfirmDialog.vue 對應的同步等級輸入框只有 :min="1"、
                     沒有上限，等級上限提升時兩處會漂移，請一併檢查。
                 -->
-                <el-form-item :label="$t('level-sync')">
+                <el-form-item>
+                    <!--
+                        這一項排在三個 filter 之間、外觀也像 filter，但它不觸發搜尋，
+                        只影響難度欄、且只對宇宙探索的等級同步配方有意義，
+                        因此在 label 旁附一個說明用的 tooltip。
+                    -->
+                    <template #label>
+                        <span class="filter-label">
+                            {{ $t('level-sync') }}
+                            <el-tooltip
+                                :content="$t('level-sync-hint')"
+                                placement="top"
+                            >
+                                <el-icon class="filter-label-hint">
+                                    <QuestionFilled />
+                                </el-icon>
+                            </el-tooltip>
+                        </span>
+                    </template>
                     <el-input-number
                         v-model="syncLevel"
                         clearable
@@ -601,7 +685,15 @@ function toggleRecipeFavorite(row: RecipeInfo) {
                 :width="compactLayout ? undefined : 90"
             >
                 <template #default="{ row }">
-                    {{ difficultyMap.get((row as RecipeInfo).id) ?? '—' }}
+                    <!--
+                        「…」＝還在算；「—」＝算完了但沒有值（等級同步配方尚未
+                        填同步等級，或查詢失敗）。兩者都缺值但意義不同，不能共用
+                        同一個字元，否則冷啟動時整欄的「—」看起來像壞掉。
+                    -->
+                    {{
+                        difficultyMap.get((row as RecipeInfo).id) ??
+                        (isDifficultyLoading ? '…' : '—')
+                    }}
                 </template>
             </el-table-column>
             <el-table-column prop="item_name" :label="$t('name')" />
@@ -671,6 +763,17 @@ function toggleRecipeFavorite(row: RecipeInfo) {
 .select-filters :deep(.el-input-number) {
     width: 100%;
 }
+
+.filter-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.filter-label-hint {
+    color: var(--el-text-color-secondary);
+    cursor: help;
+}
 </style>
 
 <fluent locale="zh-CN">
@@ -687,6 +790,7 @@ level = 等级
 name = 名称
 can-hq = 存在HQ
 level-sync = 等级同步
+level-sync-hint = 仅影响「难度」列的显示，且只对宇宙探索的等级同步配方有意义。不会触发搜索。
 
 favorite = 收藏
 unfavorite = 取消收藏
@@ -708,6 +812,7 @@ level = 等級
 name = 名稱
 can-hq = 存在HQ
 level-sync = 等級同步
+level-sync-hint = 僅影響「難度」欄的顯示，且只對宇宙探索的等級同步配方有意義。不會觸發搜尋。
 
 favorite = 收藏
 unfavorite = 取消收藏
@@ -729,6 +834,7 @@ level = Level
 name = Name
 can-hq = Can HQ
 level-sync = Level Sync
+level-sync-hint = Only affects the Difficulty column, and only for Cosmic Exploration level-sync recipes. It does not trigger a search.
 
 favorite = Favorite
 unfavorite = Unfavorite
@@ -750,6 +856,7 @@ level = レベル
 name = アイテム
 can-hq = HQ可
 level-sync = レベルsync
+level-sync-hint = 「必要工数」列の表示にのみ影響し、宇宙探索のレベルsyncレシピにのみ有効です。検索は実行されません。
 
 favorite = お気に入り
 unfavorite = お気に入り解除
