@@ -182,6 +182,9 @@ const isReadingSolver = ref(0);
 const isReadingSolverDisplay = ref(false); // This is basicly (isReadingSolver != 0), with a 500ms delay on rising edge
 const previewSolver = ref(false);
 const activeTab = ref(DEFAULT_TAB);
+// 求解分頁下方的巨集區預設展開：使用者求解完最想看的就是巨集，
+// 收合起來等於還要多點一次。仍可自行收合。
+const solverMacroActiveNames = ref(['macro']);
 
 let isReadingSolverDisplayStopTimer: NodeJS.Timeout | null = null;
 watch(isReadingSolver, (irs, irsPrev) => {
@@ -458,9 +461,13 @@ async function handleSolverResult(
                             />
                             <el-collapse
                                 v-if="displayActions.length > 0"
+                                v-model="solverMacroActiveNames"
                                 class="solver-macro"
                             >
-                                <el-collapse-item :title="$t('macro')">
+                                <el-collapse-item
+                                    name="macro"
+                                    :title="$t('macro')"
+                                >
                                     <MacroExporter
                                         :actions="displayActions"
                                         :item="item"
@@ -565,6 +572,11 @@ async function handleSolverResult(
 .action-queue {
     border-left: 5px solid var(--el-border-color);
     margin-bottom: 5px;
+}
+
+/* 與上方的 SolverList 之間留出間距，否則巨集區會緊貼求解器清單下緣 */
+.solver-macro {
+    margin-top: 8px;
 }
 </style>
 
