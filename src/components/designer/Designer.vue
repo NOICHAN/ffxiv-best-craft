@@ -51,7 +51,7 @@ import {
 } from '@/libs/Craft';
 import { read_solver } from '@/libs/Solver';
 import { calculateEnhancedAttributsAbs, Enhancer } from '@/libs/Enhancer';
-import { GearsetsRow } from '@/libs/Gearsets';
+import { choiceGearsetDisplayName, GearsetsRow } from '@/libs/Gearsets';
 import useDesignerStore from '@/stores/designer';
 import useGearsetsStore from '@/stores/gearsets';
 
@@ -69,6 +69,7 @@ import Analyzers from './tabs/Analyzers.vue';
 import { activeSeqKey, displayJobKey } from './injectionkeys';
 import { Slot, Sequence, SequenceSource } from './types';
 import MarcoInfo from './MarcoInfo.vue';
+import LevelRequirementPanel from './LevelRequirementPanel.vue';
 import { describeError } from './errors';
 
 const props = defineProps<{
@@ -104,8 +105,19 @@ const attributes = computed<Attributes>(
     () => (selectedGearsetRow.value ?? gearsetsStore.default).value,
 );
 // Gearsets changed
-gearsetsStore.$subscribe((_, state) => {
-    selectDefaultGearset();
+gearsetsStore.$subscribe(() => {
+    // 只有在目前選中的配裝已不存在／不再相容時才重選。
+    // 原本是無條件呼叫 selectDefaultGearset()，會讓使用者在等級不足面板上
+    // 按「套用」改等級（寫入 store）時，剛選好的配裝被打回預設，
+    // 面板因此永遠關不掉。
+    const current = selectedGearsetRow.value;
+    if (
+        current == undefined ||
+        (!props.isCustomRecipe &&
+            !current.compatibleJobs.includes(displayJob.value))
+    ) {
+        selectDefaultGearset();
+    }
 });
 // Recipe changed
 watch(
@@ -176,6 +188,50 @@ var attributionAlert = computed(() => {
     }
     return;
 });
+
+// 遊戲規則：配方等級最多可高於玩家等級 5 級。
+// 與 src-libs/src/lib.rs 的 `recipe.job_level > attrs.level + 5` 同一條規則，
+// 兩邊改動必須同步。
+const LEVEL_TOLERANCE = 5;
+
+// 等級不足時模板改渲染攔阻面板，主體整塊不掛載
+const levelShortfall = computed(() => {
+    const need = props.recipe.job_level;
+    const have = enhancedAttributes.value.level;
+    return need > have + LEVEL_TOLERANCE ? { need, have } : undefined;
+});
+
+// 等級不足時模板不會渲染主體，這裡把等級墊高只是為了讓 setup 頂層的 await 與
+// 下方的 watch 不致拋錯——那會被 Page.vue 的 onErrorCaptured 接走，整頁換成
+// 錯誤畫面。使用者修正等級後 watch 會以真實屬性重算。
+function attributesForSimulation(
+    attrs: Attributes,
+    recipe: Recipe,
+): Attributes {
+    const minLevel = recipe.job_level - LEVEL_TOLERANCE;
+    return attrs.level >= minLevel ? attrs : { ...attrs, level: minLevel };
+}
+
+// 攔阻面板用：可切換的相容配裝清單
+const compatibleGearsets = computed<GearsetsRow[]>(() =>
+    props.isCustomRecipe
+        ? gearsetsStore.gearsets
+        : gearsetsStore.gearsets.filter((v: GearsetsRow) =>
+              v.compatibleJobs.includes(displayJob.value),
+          ),
+);
+const currentGearsetName = computed(() =>
+    choiceGearsetDisplayName(selectedGearsetRow.value ?? gearsetsStore.default),
+);
+
+// 攔阻面板的「套用」：直接改寫 gearsets store 中該列的等級。
+// 這會觸發上方的 $subscribe，但那裡已加了「仍相容就不動」的判斷，
+// gearsetId 不會被重設，enhancedAttributes 因此重算、面板隨即消失。
+function applyGearsetLevel(level: number) {
+    const row = selectedGearsetRow.value ?? gearsetsStore.default;
+    row.value.level = level;
+}
+
 // UI States
 const DEFAULT_TAB = 'solver-list';
 const isReadingSolver = ref(0);
@@ -201,7 +257,7 @@ watch(isReadingSolver, (irs, irsPrev) => {
 const initQuality = ref(0);
 const initStatus = ref<Status>({
     ...(await newStatus(
-        enhancedAttributes.value,
+        attributesForSimulation(enhancedAttributes.value, props.recipe),
         props.recipe,
         store.content?.stellarSteadyHandCount ?? 0,
     )),
@@ -210,7 +266,7 @@ const initStatus = ref<Status>({
 watch([props, enhancedAttributes, initQuality], async ([p, ea, iq]) => {
     initStatus.value = {
         ...(await newStatus(
-            ea,
+            attributesForSimulation(ea, p.recipe),
             p.recipe,
             store.content?.stellarSteadyHandCount ?? 0,
         )),
@@ -334,7 +390,18 @@ async function handleSolverResult(
 </script>
 
 <template>
-    <div class="main-page">
+    <LevelRequirementPanel
+        v-if="levelShortfall"
+        :need="levelShortfall.need"
+        :have="levelShortfall.have"
+        :gearset-name="currentGearsetName"
+        :gearsets="compatibleGearsets"
+        :gearset-id="gearsetId"
+        :sync-level="store.content?.syncLevel"
+        @select-gearset="(id: number) => (gearsetId = id)"
+        @apply-level="applyGearsetLevel"
+    />
+    <div v-else class="main-page">
         <div class="crafting-alerts">
             <el-alert
                 v-if="attributionAlert != undefined"
