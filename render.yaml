@@ -19,3 +19,15 @@ services:
       dockerContext: .
       healthCheckPath: /health
       autoDeploy: true
+      # 只有後端相關的檔案變動才重建。少了這個，每次推前端的 commit 都會觸發
+      # 一次十幾分鐘的 Rust 重建，白白吃掉 free plan 的額度。
+      buildFilter:
+          paths:
+              - src-server/**
+              - src-db/**
+              - docker/Dockerfile.server
+              - docker/server/config.render.toml
+              - Cargo.toml
+              - Cargo.lock
+              - rust-toolchain
+              - .dockerignore
