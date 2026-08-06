@@ -32,8 +32,12 @@ import { computed, reactive, ref, watch, watchEffect } from 'vue';
 import { Item, ItemWithAmount, Recipe } from '@/libs/Craft';
 import useSettingsStore from '@/stores/settings';
 import { DataSource } from '@/datasource/source';
+import { useFluent } from 'fluent-vue';
+import BlockLoadError from '../BlockLoadError.vue';
+import { describeError } from '../errors';
 
 const settingStore = useSettingsStore();
+const { $t } = useFluent();
 
 const props = defineProps<{
     item: Item;
@@ -70,6 +74,9 @@ const manullyInput = computed(
     () => props.recipeId !== undefined && inputType.value != 'manully',
 );
 const items = ref<{ item: Item; amount: number; hqAmount: number }[]>([]);
+const loadError = ref<string>();
+// 遞增即可觸發重載；納入下方 watch 的相依
+const retryToken = ref(0);
 
 watchEffect(() => {
     if (props.recipeId === undefined) {
@@ -78,14 +85,23 @@ watchEffect(() => {
 });
 
 watch(
-    [settingStore.getDataSource, () => props.recipeId],
+    [settingStore.getDataSource, () => props.recipeId, retryToken],
     async ([dataSource, recipeId]) => {
-        const source = await dataSource;
-        if (recipeId === undefined) {
+        loadError.value = undefined;
+        try {
+            const source = await dataSource;
+            if (recipeId === undefined) {
+                items.value = [];
+            } else {
+                const ri = await source.recipesIngredients(recipeId);
+                items.value = reactive(await calcItems(source, ri));
+            }
+        } catch (err) {
+            // 不往上冒泡，否則整個製作介面會被 Page.vue 的錯誤畫面取代。
+            // 退回手動輸入，讓這個分頁仍然可用。
             items.value = [];
-        } else {
-            const ri = await source.recipesIngredients(recipeId);
-            items.value = reactive(await calcItems(source, ri));
+            inputType.value = 'manully';
+            loadError.value = describeError(err, $t);
         }
     },
     { immediate: true },
@@ -109,6 +125,11 @@ watchEffect(() => {
 
 <template>
     <div style="display: flex; flex-direction: column">
+        <BlockLoadError
+            v-if="loadError"
+            :message="loadError"
+            @retry="retryToken++"
+        />
         <el-form label-width="auto" @submit.prevent>
             <el-form-item label=" ">
                 <el-radio-group v-model="inputType">
