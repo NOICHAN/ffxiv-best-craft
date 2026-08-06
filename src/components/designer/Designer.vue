@@ -27,14 +27,7 @@ import {
     ref,
     watch,
 } from 'vue';
-import {
-    ElScrollbar,
-    ElAlert,
-    ElTabs,
-    ElTabPane,
-    ElCollapse,
-    ElCollapseItem,
-} from 'element-plus';
+import { ElScrollbar, ElAlert, ElTabs, ElTabPane } from 'element-plus';
 import { useMediaQuery, useElementSize } from '@vueuse/core';
 
 import {
@@ -182,9 +175,6 @@ const isReadingSolver = ref(0);
 const isReadingSolverDisplay = ref(false); // This is basicly (isReadingSolver != 0), with a 500ms delay on rising edge
 const previewSolver = ref(false);
 const activeTab = ref(DEFAULT_TAB);
-// 求解分頁下方的巨集區預設展開：使用者求解完最想看的就是巨集，
-// 收合起來等於還要多點一次。仍可自行收合。
-const solverMacroActiveNames = ref(['macro']);
 
 let isReadingSolverDisplayStopTimer: NodeJS.Timeout | null = null;
 watch(isReadingSolver, (irs, irsPrev) => {
@@ -446,35 +436,34 @@ async function handleSolverResult(
                         name="solver-list"
                         class="multi-function-area"
                     >
-                        <el-scrollbar style="flex: auto">
-                            <SolverList
-                                :init-status="initStatus"
-                                :current-status="displayedStatus"
-                                :recipe-name="item.name"
-                                :can-hq="item.can_be_hq"
-                                @solver-load="readSolver()"
-                                @solver-result="handleSolverResult"
-                                :collectable-shop-refine="collectableShopRefine"
-                                :maxStellarSteadyHand="
-                                    store.content?.stellarSteadyHandCount
-                                "
-                            />
-                            <el-collapse
+                        <div class="solver-tab-content">
+                            <el-scrollbar class="solver-list-panel">
+                                <SolverList
+                                    :init-status="initStatus"
+                                    :current-status="displayedStatus"
+                                    :recipe-name="item.name"
+                                    :can-hq="item.can_be_hq"
+                                    @solver-load="readSolver()"
+                                    @solver-result="handleSolverResult"
+                                    :collectable-shop-refine="
+                                        collectableShopRefine
+                                    "
+                                    :maxStellarSteadyHand="
+                                        store.content?.stellarSteadyHandCount
+                                    "
+                                />
+                            </el-scrollbar>
+                            <el-scrollbar
                                 v-if="displayActions.length > 0"
-                                v-model="solverMacroActiveNames"
-                                class="solver-macro"
+                                class="solver-macro-panel"
                             >
-                                <el-collapse-item
-                                    name="macro"
-                                    :title="$t('macro')"
-                                >
-                                    <MacroExporter
-                                        :actions="displayActions"
-                                        :item="item"
-                                    />
-                                </el-collapse-item>
-                            </el-collapse>
-                        </el-scrollbar>
+                                <MacroExporter
+                                    :actions="displayActions"
+                                    :item="item"
+                                    hide-options
+                                />
+                            </el-scrollbar>
+                        </div>
                     </el-tab-pane>
                     <el-tab-pane
                         :label="$t('analyzer')"
@@ -574,9 +563,36 @@ async function handleSolverResult(
     margin-bottom: 5px;
 }
 
-/* 與上方的 SolverList 之間留出間距，否則巨集區會緊貼求解器清單下緣 */
-.solver-macro {
-    margin-top: 8px;
+/* 求解分頁：左邊求解器清單、右邊巨集區左右並排，各自獨立捲動 */
+.solver-tab-content {
+    display: flex;
+    height: 100%;
+    width: 100%;
+    gap: 10px;
+}
+
+.solver-list-panel,
+.solver-macro-panel {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 0;
+}
+
+.solver-macro-panel {
+    border-left: 1px solid var(--el-border-color);
+}
+
+/* .above-right-panel 本身可用寬度已受左側技能面板（270px）擠壓，
+   估算左右兩欄各自需要約 260px 才不會太擁擠，窄於此斷點時改回上下疊排 */
+@media screen and (max-width: 900px) {
+    .solver-tab-content {
+        flex-direction: column;
+    }
+
+    .solver-macro-panel {
+        border-left: none;
+        border-top: 1px solid var(--el-border-color);
+    }
 }
 </style>
 

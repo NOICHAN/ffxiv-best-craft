@@ -40,10 +40,16 @@ import useStore from '@/stores/designer';
 import { compress as cacCompress } from 'xiv-cac-utils';
 import { openUrl } from '@/libs/Utils';
 
-const props = defineProps<{
-    actions: Actions[];
-    item: Item;
-}>();
+const props = withDefaults(
+    defineProps<{
+        actions: Actions[];
+        item: Item;
+        // 是否隱藏可調整選項與 CAC/hqhelper 外部工具區塊，
+        // 求解分頁只想快速取得巨集文字，其餘設定仍統一由匯出分頁管理
+        hideOptions?: boolean;
+    }>(),
+    { hideOptions: false },
+);
 const { $t } = useFluent();
 const store = useStore();
 const genOptions = reactive(store.options.exportOptions);
@@ -197,7 +203,7 @@ async function copy(macroText: string, macroInfo: string) {
 
 <template>
     <div style="margin-left: 10px">
-        <div>
+        <div v-if="!hideOptions">
             <el-checkbox v-model="genOptions.hasLock" :label="$t('has-lock')" />
             <el-checkbox
                 v-if="isWebsite"
@@ -205,7 +211,7 @@ async function copy(macroText: string, macroInfo: string) {
                 :label="$t('oneclick-copy')"
             />
         </div>
-        <el-form label-width="auto">
+        <el-form v-if="!hideOptions" label-width="auto">
             <el-form-item :label="$t('has-notify')">
                 <el-segmented
                     v-model="genOptions.addNotification"
@@ -250,60 +256,66 @@ async function copy(macroText: string, macroInfo: string) {
                 </code>
             </el-card>
         </el-space>
-        <el-divider id="divider" content-position="left">
-            {{ $t('export-cac') }}
-        </el-divider>
-        <el-card
-            v-if="actions.length > 0"
-            :class="genOptions.oneclickCopy ? 'box-card-oneclick' : 'box-card'"
-            shadow="hover"
-            style="width: 300px"
-            @click="
-                genOptions.oneclickCopy
-                    ? copy(cac, $t('copied-cac'))
-                    : undefined
-            "
-        >
-            <code class="box-body">{{ cac }}</code>
-        </el-card>
-        <el-space v-if="actions.length > 0" style="margin-top: 12px">
-            <el-button-group>
-                <el-button @click="openUrl(openInCacUrl)">
-                    {{ $t('open-in-cac-tool') }}
-                </el-button>
-                <el-button
-                    :icon="CopyDocument"
-                    @click="copy(openInCacUrl, $t('copied-link'))"
-                />
-            </el-button-group>
-            <el-button-group>
-                <el-button @click="openUrl(openInHqHelperUrl)">
-                    {{ $t('open-in-hqhelper') }}
-                </el-button>
-                <el-button
-                    :icon="CopyDocument"
-                    @click="copy(openInHqHelperUrl, $t('copied-link'))"
-                />
-            </el-button-group>
-        </el-space>
-        <el-divider id="divider" content-position="left">
-            {{ $t('export-json') }}
-        </el-divider>
-        <el-card
-            v-if="actions.length > 0"
-            :class="genOptions.oneclickCopy ? 'box-card-oneclick' : 'box-card'"
-            shadow="hover"
-            style="width: 300px"
-            @click="
-                genOptions.oneclickCopy
-                    ? copy(JSON.stringify(actions), $t('copied-json'))
-                    : undefined
-            "
-        >
-            <code class="box-body">
-                {{ JSON.stringify(actions, undefined, 4) }}
-            </code>
-        </el-card>
+        <template v-if="!hideOptions">
+            <el-divider id="divider" content-position="left">
+                {{ $t('export-cac') }}
+            </el-divider>
+            <el-card
+                v-if="actions.length > 0"
+                :class="
+                    genOptions.oneclickCopy ? 'box-card-oneclick' : 'box-card'
+                "
+                shadow="hover"
+                style="width: 300px"
+                @click="
+                    genOptions.oneclickCopy
+                        ? copy(cac, $t('copied-cac'))
+                        : undefined
+                "
+            >
+                <code class="box-body">{{ cac }}</code>
+            </el-card>
+            <el-space v-if="actions.length > 0" style="margin-top: 12px">
+                <el-button-group>
+                    <el-button @click="openUrl(openInCacUrl)">
+                        {{ $t('open-in-cac-tool') }}
+                    </el-button>
+                    <el-button
+                        :icon="CopyDocument"
+                        @click="copy(openInCacUrl, $t('copied-link'))"
+                    />
+                </el-button-group>
+                <el-button-group>
+                    <el-button @click="openUrl(openInHqHelperUrl)">
+                        {{ $t('open-in-hqhelper') }}
+                    </el-button>
+                    <el-button
+                        :icon="CopyDocument"
+                        @click="copy(openInHqHelperUrl, $t('copied-link'))"
+                    />
+                </el-button-group>
+            </el-space>
+            <el-divider id="divider" content-position="left">
+                {{ $t('export-json') }}
+            </el-divider>
+            <el-card
+                v-if="actions.length > 0"
+                :class="
+                    genOptions.oneclickCopy ? 'box-card-oneclick' : 'box-card'
+                "
+                shadow="hover"
+                style="width: 300px"
+                @click="
+                    genOptions.oneclickCopy
+                        ? copy(JSON.stringify(actions), $t('copied-json'))
+                        : undefined
+                "
+            >
+                <code class="box-body">
+                    {{ JSON.stringify(actions, undefined, 4) }}
+                </code>
+            </el-card>
+        </template>
     </div>
 </template>
 
