@@ -68,7 +68,7 @@ const color = computed(() => {
                 </clipPath>
             </defs>
             <g
-                stroke="black"
+                :stroke="'var(--tnze-bar-outline)'"
                 stroke-linecap="round"
                 transform="translate(1.5, 1.5)"
             >
@@ -77,7 +77,7 @@ const color = computed(() => {
                     :x="(i - 1) * blockTotal"
                     :width="blockWidth"
                     :height="blockHeight"
-                    fill="#424242"
+                    fill="var(--tnze-bar-track)"
                 />
                 <rect
                     v-for="i in Math.ceil(max / 10)"

@@ -58,13 +58,15 @@ const quality = computed<number>(() =>
 
 const progressColor = computed<string>(() => {
     if (props.status.progress >= props.status.recipe.difficulty)
-        return '#13CE66';
-    if (props.status.durability <= 0) return '#F56C6C';
-    return '#409EFF';
+        return '#4ade80';
+    if (props.status.durability <= 0) return '#ff8f8f';
+    return '#63b0ff';
 });
 
 const qualityColor = computed<string>(() =>
-    props.status.quality >= props.status.recipe.quality ? '#13CE66' : '#409EFF',
+    props.status.quality >= props.status.recipe.quality
+        ? '#4ade80'
+        : '#63b0ff',
 );
 
 const craftPointPercentage = computed(() =>
@@ -126,7 +128,7 @@ const hqPerc = asyncComputed(() => highQualityProbability(props.status), null);
                     :stroke-width="12"
                     :percentage="craftPointPercentage"
                     :show-text="false"
-                    color="#FF9999"
+                    color="#ffb0b0"
                     striped
                 />
 
@@ -280,6 +282,13 @@ const hqPerc = asyncComputed(() => highQualityProbability(props.status), null);
 
 .bar-title {
     user-select: none;
+}
+
+/* 語意條的軌道固定不隨主題變色，邊界由描邊負責，
+   使語意色的對比只跟軌道比較，一次驗證永久成立 */
+:deep(.el-progress-bar__outer) {
+    background-color: var(--tnze-bar-track);
+    outline: 1px solid var(--tnze-bar-outline);
 }
 
 @media screen and (max-width: 480px) {
