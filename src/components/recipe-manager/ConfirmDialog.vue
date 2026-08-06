@@ -49,7 +49,9 @@ const props = defineProps<{
     stellarSteadyHandCount: number;
     // 外部（配方清單）已填的等級同步值，僅作為 dynRecipeLevel 的初始值帶入，
     // 使用者在對話框內仍可自由修改，不會回寫給外部。未傳入時行為與過去相同。
-    syncLevel?: number;
+    // 型別含 null：來源是 el-input-number，清空時依 valueOnClear 預設回傳 null 而非
+    // undefined，因此下方一律用鬆散的 `!= undefined`（同時涵蓋 null 與 undefined）。
+    syncLevel?: number | null;
 }>();
 const router = useRouter();
 const { $t } = useFluent();
@@ -103,11 +105,24 @@ async function loadDynRecipe(
 // 換配方時不一定會重建元件，所以不能只在 ref() 初始化時取用 props.syncLevel 一次。
 // 這裡在「對話框開啟」或「recipeInfo 換掉」時，把外部值重新帶入作為初始值；
 // 使用者在對話框開著的期間自行修改 dynRecipeLevel 不會被這裡覆蓋。
-watch([visible, () => props.recipeInfo], ([isVisible]) => {
-    if (isVisible) {
-        dynRecipeLevel.value = props.syncLevel;
-    }
-});
+//
+// 必須 immediate：元件掛載當下 visible 已經是 true（父層那五個 ref 在同一個微任務
+// 內賦值，Vue 只 flush 一次 render，v-if 轉真那次渲染時 modelValue 就已為 true），
+// watch source 的初值即為 [true, recipeInfo]，非 immediate 的 watch 在整個 app
+// session 的第一次開啟不會觸發。
+//
+// 必須判斷 props.syncLevel != undefined：外部沒有提供同步等級時（例如收藏頁的
+// RecipeFavored.vue 就不傳這個 prop），不該把使用者上次在對話框內填的值清掉——
+// 元件是永久存活的，清掉等於每次開啟都要重打一次，且收藏頁沒有清單層的欄位可補救。
+watch(
+    [visible, () => props.recipeInfo],
+    ([isVisible]) => {
+        if (isVisible && props.syncLevel != undefined) {
+            dynRecipeLevel.value = props.syncLevel;
+        }
+    },
+    { immediate: true },
+);
 
 watch(
     [isDynRecipe, dynRecipeLevel, () => props.recipeInfo],
@@ -374,6 +389,7 @@ designer-mode = Normal Mode
 simulator-mode = Simulator Mode
 sync-level-item-name = { $itemName } (Lv. { $syncLevel })
 
+sync-level = Level Sync
 type = Crafting Type
 level = Level
 recipe-id = Recipe ID
