@@ -163,17 +163,22 @@ async function confirm(mode: 'simulator' | 'designer') {
             syncLevel: dynRecipeLevel.value,
         });
     }
-    selectRecipe(
-        recipe.value,
-        props.recipeInfo.id,
-        props.recipeInfo.material_quality_factor,
-        props.recipeInfo,
-        props.collectability,
-        itemInfo,
-        props.recipeInfo.job,
-        mode == 'simulator',
-        props.stellarSteadyHandCount,
-    );
+    selectRecipe({
+        recipe: recipe.value,
+        recipeId: props.recipeInfo.id,
+        materialQualityFactor: props.recipeInfo.material_quality_factor,
+        requirements: props.recipeInfo,
+        collectability: props.collectability,
+        item: itemInfo,
+        craftType: props.recipeInfo.job,
+        simulatorMode: mode == 'simulator',
+        stellarSteadyHandCount: props.stellarSteadyHandCount,
+        // 判定條件與上方 itemInfo.name 的加註完全一致，兩者必須同進同退
+        syncLevel:
+            isDynRecipe.value && dynRecipeLevel.value != undefined
+                ? dynRecipeLevel.value
+                : undefined,
+    });
     router.push({ name: 'designer' });
     visible.value = false;
 }

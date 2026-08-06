@@ -97,26 +97,31 @@ export function craftTypeTojobs(craftType: string): Jobs | undefined {
     );
 }
 
-export const selectRecipe = (
-    recipe: Recipe,
-    recipeId: number | undefined,
-    materialQualityFactor: number,
-    requirements: RecipeRequirements,
-    collectability: CollectablesShopRefine | undefined,
-    item: Item,
-    craftType: string,
-    simulatorMode: boolean,
-    stellarSteadyHandCount: number,
-) => {
+export interface SelectRecipeOptions {
+    recipe: Recipe;
+    recipeId?: number;
+    materialQualityFactor: number;
+    requirements: RecipeRequirements;
+    collectability?: CollectablesShopRefine;
+    item: Item;
+    craftType: string;
+    simulatorMode: boolean;
+    stellarSteadyHandCount: number;
+    // 等級同步配方（宇宙探索）使用者填入的同步等級
+    syncLevel?: number;
+}
+
+export const selectRecipe = (opts: SelectRecipeOptions) => {
     designerStore.selectRecipe({
-        job: craftTypeTojobs(craftType),
-        item,
-        recipe,
-        recipeId,
-        materialQualityFactor,
-        requirements,
-        collectability,
-        simulatorMode,
-        stellarSteadyHandCount,
+        job: craftTypeTojobs(opts.craftType),
+        item: opts.item,
+        recipe: opts.recipe,
+        recipeId: opts.recipeId,
+        materialQualityFactor: opts.materialQualityFactor,
+        requirements: opts.requirements,
+        collectability: opts.collectability,
+        simulatorMode: opts.simulatorMode,
+        stellarSteadyHandCount: opts.stellarSteadyHandCount,
+        syncLevel: opts.syncLevel,
     });
 };

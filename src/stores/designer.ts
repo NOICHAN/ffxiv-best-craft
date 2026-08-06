@@ -35,6 +35,9 @@ export default defineStore('designer', {
             collectability?: CollectablesShopRefine;
             simulatorMode: boolean;
             stellarSteadyHandCount: number;
+            // 等級同步配方（宇宙探索）使用者當初填入的同步等級。
+            // 只用於顯示引導文案，不用它重建配方。
+            syncLevel?: number;
         } | null,
         options: {
             exportOptions: {
@@ -71,6 +74,7 @@ export default defineStore('designer', {
             collectability?: CollectablesShopRefine;
             simulatorMode: boolean;
             stellarSteadyHandCount: number;
+            syncLevel?: number;
         }) {
             this.content = payload;
         },

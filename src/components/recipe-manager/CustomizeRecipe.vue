@@ -129,17 +129,15 @@ function confirm(simulatorMode: boolean) {
         required_craftsmanship: 0,
         required_control: 0,
     };
-    selectRecipe(
-        customRecipe.value,
-        undefined,
-        0,
+    selectRecipe({
+        recipe: customRecipe.value,
+        materialQualityFactor: 0,
         requirements,
-        undefined,
-        itemInfo,
-        '',
+        item: itemInfo,
+        craftType: '',
         simulatorMode,
-        3,
-    );
+        stellarSteadyHandCount: 3,
+    });
     router.push({ name: 'designer' });
 }
 </script>
