@@ -5,6 +5,13 @@
     <meta charset="UTF-8" />
     <link rel="icon" href="/favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+        wasm 模組是用 --shared-memory 編的（見 .cargo/config.toml），實例化需要
+        SharedArrayBuffer，也就需要 COOP/COEP 標頭。靜態託管（GitHub Pages）沒辦法
+        自訂回應標頭，這支 service worker 會攔截請求把標頭補上，首次載入會自動重整一次。
+        自架且已設好標頭的環境不受影響：已經跨源隔離時它什麼都不做。
+    -->
+    <script src="/coi-serviceworker.js"></script>
     <script>
         // Microsoft Clarity
         (function(c,l,a,r,i,t,y){

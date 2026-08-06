@@ -52,6 +52,10 @@ const defineTarget = (): PluginOption => {
 
 // https://vitejs.dev/config/
 export default defineConfig({
+    // 部署在子路徑時（GitHub Pages 的專案站台是 /<repo>/）要帶 base，
+    // 否則產出的資源路徑會是絕對的 /assets/... 而 404。
+    // 不設就維持原本的根路徑行為，正式站台的部署不受影響。
+    base: process.env.VITE_BASE_PATH ?? '/',
     plugins: [
         defineTarget(),
         wasm(),

@@ -1,0 +1,66 @@
+# 把網頁版部署到 GitHub Pages。
+#
+# 與 build_web.yml 互不影響 —— 那份是上游用 SSH 推到自架站台的流程，只在打 tag 時部署。
+#
+# 專案站台的網址是 https://<user>.github.io/<repo>/，所以要帶 base；
+# 見 vite.config.ts 的 VITE_BASE_PATH。路由用的是 hash history，不需要 SPA fallback。
+name: 'deploy_pages'
+on:
+    push:
+        branches:
+            - main
+    workflow_dispatch:
+
+permissions:
+    contents: read
+    pages: write
+    id-token: write
+
+# 不取消進行中的部署，避免把已上線的版本推到一半就中斷
+concurrency:
+    group: 'pages'
+    cancel-in-progress: false
+
+jobs:
+    build:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - uses: pnpm/action-setup@v4
+            - name: setup node
+              uses: actions/setup-node@v4
+              with:
+                  node-version: latest
+                  cache: pnpm
+            - run: corepack enable
+            - name: install Rust nightly
+              uses: dtolnay/rust-toolchain@nightly
+              with:
+                  components: rust-src
+                  targets: wasm32-unknown-unknown
+            - name: install wasm-pack
+              run: npm install -g wasm-pack
+            # prebuild-web 會先用 -Z build-std 編 wasm，需要上面的 rust-src
+            - name: install app dependencies and build it
+              env:
+                  VITE_BASE_PATH: /${{ github.event.repository.name }}/
+              run: pnpm i && pnpm run build-web
+            - name: setup pages
+              uses: actions/configure-pages@v5
+              with:
+                  enablement: true
+            - name: upload artifact
+              uses: actions/upload-pages-artifact@v3
+              with:
+                  path: dist/
+
+    deploy:
+        needs: build
+        runs-on: ubuntu-latest
+        environment:
+            name: github-pages
+            url: ${{ steps.deployment.outputs.page_url }}
+        steps:
+            - name: deploy to GitHub Pages
+              id: deployment
+              uses: actions/deploy-pages@v4
