@@ -27,7 +27,14 @@ import {
     ref,
     watch,
 } from 'vue';
-import { ElScrollbar, ElAlert, ElTabs, ElTabPane } from 'element-plus';
+import {
+    ElScrollbar,
+    ElAlert,
+    ElTabs,
+    ElTabPane,
+    ElCollapse,
+    ElCollapseItem,
+} from 'element-plus';
 import { useMediaQuery, useElementSize } from '@vueuse/core';
 
 import {
@@ -449,6 +456,17 @@ async function handleSolverResult(
                                     store.content?.stellarSteadyHandCount
                                 "
                             />
+                            <el-collapse
+                                v-if="displayActions.length > 0"
+                                class="solver-macro"
+                            >
+                                <el-collapse-item :title="$t('macro')">
+                                    <MacroExporter
+                                        :actions="displayActions"
+                                        :item="item"
+                                    />
+                                </el-collapse-item>
+                            </el-collapse>
                         </el-scrollbar>
                     </el-tab-pane>
                     <el-tab-pane
@@ -552,6 +570,7 @@ async function handleSolverResult(
 
 <fluent locale="zh-CN">
 solvers = 求解
+macro = 宏
 export-macro = 导出
 import-macro = 导入
 attributes-enhance = 食药&装备
@@ -580,6 +599,7 @@ attributes-requirements = 制作该配方要求：作业精度 ≥ { $craftsmans
 
 <fluent locale="zh-TW">
 solvers = 求解
+macro = 巨集
 export-macro = 匯出
 import-macro = 匯入
 attributes-enhance = 食藥&裝備
@@ -608,6 +628,7 @@ attributes-requirements = 製作該配方要求：作業精度 ≥ { $craftsmans
 
 <fluent locale="en-US">
 solvers = Solvers
+macro = Macro
 export-macro = Export
 import-macro = Import
 attributes-enhance = Medicines & Meals
@@ -644,6 +665,7 @@ attributes-requirements = Require: craftsmanship ≥ { $craftsmanship } and cont
 </fluent>
 
 <fluent locale="ja-JP">
+macro = マクロ
 attributes-enhance = 薬品・調理品
 init-quality = 初期品質
 and = { $a }と{ $b }
