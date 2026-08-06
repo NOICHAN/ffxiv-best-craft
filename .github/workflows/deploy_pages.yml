@@ -2,6 +2,14 @@
 #
 # 與 build_web.yml 互不影響 —— 那份是上游用 SSH 推到自架站台的流程，只在打 tag 時部署。
 #
+# 這裡走的是「把產物推到 gh-pages 分支」的舊式發佈管線，而不是
+# actions/deploy-pages 那條新的。原因：新管線在這個 repo 上會把部署卡在
+# deployment_queued 直到逾時，GitHub 端始終沒有接手處理（產物與建置都正常）。
+# 舊管線是完全不同的程式碼路徑。
+#
+# 前提：Settings → Pages → Source 要設成 Deploy from a branch，
+#       分支選 gh-pages、目錄選 /(root)。
+#
 # 專案站台的網址是 https://<user>.github.io/<repo>/，所以要帶 base；
 # 見 vite.config.ts 的 VITE_BASE_PATH。路由用的是 hash history，不需要 SPA fallback。
 name: 'deploy_pages'
@@ -12,17 +20,14 @@ on:
     workflow_dispatch:
 
 permissions:
-    contents: read
-    pages: write
-    id-token: write
+    contents: write
 
-# 不取消進行中的部署，避免把已上線的版本推到一半就中斷
 concurrency:
     group: 'pages'
     cancel-in-progress: false
 
 jobs:
-    build:
+    build-and-deploy:
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
@@ -45,27 +50,19 @@ jobs:
               env:
                   VITE_BASE_PATH: /${{ github.event.repository.name }}/
               run: pnpm i && pnpm run build-web
-            # 這裡刻意不用 actions/configure-pages —— 它的輸出我們沒用到（base 由
-            # VITE_BASE_PATH 自己給），而它的 enablement 選項需要 admin 權限，
-            # 內建的 GITHUB_TOKEN 沒有，只會讓整個 job 失敗。
-            # 前提：repo 的 Settings → Pages → Source 要設成 GitHub Actions。
-            - name: upload artifact
-              uses: actions/upload-pages-artifact@v3
-              with:
-                  path: dist/
-
-    deploy:
-        needs: build
-        runs-on: ubuntu-latest
-        environment:
-            name: github-pages
-            url: ${{ steps.deployment.outputs.page_url }}
-        steps:
-            - name: deploy to GitHub Pages
-              id: deployment
-              uses: actions/deploy-pages@v4
-              with:
-                  # 預設是 10 分鐘。正常情況下這步只要幾十秒；會拖到逾時代表
-                  # GitHub 的 Pages 發佈管線沒有接手（狀態一直停在 deployment_queued），
-                  # 那不是等久一點就會好的事，所以縮短成 5 分鐘早點拿到結果。
-                  timeout: 300000
+            # 每次都以單一 commit 覆蓋 gh-pages，不留歷史 —— 產物十幾 MB，
+            # 累積歷史只會把 repo 撐大，而舊版本本來就沒有保留的價值。
+            - name: deploy to gh-pages branch
+              env:
+                  TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run: |
+                  cd dist
+                  touch .nojekyll
+                  git init -q -b gh-pages
+                  git config user.name 'github-actions[bot]'
+                  git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+                  git add -A
+                  git commit -q -m "deploy ${GITHUB_SHA}"
+                  git push -q --force \
+                    "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+                    gh-pages
