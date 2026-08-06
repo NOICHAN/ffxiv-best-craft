@@ -175,10 +175,14 @@ watchEffect(async () => {
     }
     if (shouldBeTransparent) {
         bgMicaColor.value = 'transparent';
-        bgColor.value = isDark ? '#2e2e2e' : '#FFFFFF';
+        bgColor.value = isDark
+            ? 'var(--tnze-mica-opaque-dark)'
+            : 'var(--tnze-mica-opaque-light)';
     } else {
         bgMicaColor.value = 'var(--el-bg-color)';
-        bgColor.value = isDark ? '#242424' : 'var(--el-bg-color-page)';
+        bgColor.value = isDark
+            ? 'var(--tnze-app-bg-dark)'
+            : 'var(--tnze-app-bg-light)';
     }
 });
 </script>
@@ -242,6 +246,8 @@ watchEffect(async () => {
 </template>
 
 <style>
+@import './assets/theme.css';
+
 @font-face {
     font-family: 'xivicon';
     src: url('./assets/fonts/XIV_Icon_Recreations.ttf');

@@ -1,0 +1,68 @@
+/* This file is part of BestCraft.
+ * Copyright (C) 2026 Tnze
+ *
+ * BestCraft is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * BestCraft is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+:root {
+    --el-bg-color-page: #f7f8fa;
+    --el-bg-color: #ffffff;
+    --el-text-color-primary: #1c1e21;
+    --el-text-color-regular: #33373d;
+    --el-text-color-secondary: #51555d;
+    --el-text-color-placeholder: #6d737b;
+    --el-color-primary: #0053aa;
+    --el-color-success: #096231;
+    --el-color-warning: #754c0f;
+    --el-color-danger: #ac0c0c;
+    --el-color-error: #ac0c0c;
+    --el-color-info: #53555a;
+    --el-border-color: #8b9098;
+
+    /* 語意條：軌道與描邊 */
+    --tnze-bar-track: #3a3f45;
+    --tnze-bar-outline: #8b9098;
+
+    /* 填色角色：按鈕、標籤的底色，其上文字用 --tnze-on-fill */
+    --tnze-fill-primary: #49a3ff;
+    --tnze-fill-success: #13ce66;
+    --tnze-fill-warning: #e6a23c;
+    --tnze-fill-danger: #f67979;
+    --tnze-fill-info: #9d9fa4;
+    --tnze-on-fill: #10131a;
+
+    /* 頁面底色，供 App.vue 的 Mica 背景邏輯取用 */
+    --tnze-app-bg-light: #f7f8fa;
+    --tnze-app-bg-dark: #0e1013;
+    --tnze-mica-opaque-light: #ffffff;
+    --tnze-mica-opaque-dark: #191c20;
+}
+
+html.dark {
+    --el-bg-color-page: #0e1013;
+    --el-bg-color: #191c20;
+    --el-text-color-primary: #f2f4f6;
+    --el-text-color-regular: #d3d7dc;
+    --el-text-color-secondary: #a8aeb6;
+    --el-text-color-placeholder: #8d949d;
+    --el-color-primary: #57aaff;
+    --el-color-success: #13ce66;
+    --el-color-warning: #e6a23c;
+    --el-color-danger: #f78585;
+    --el-color-error: #f78585;
+    --el-color-info: #a3a6ab;
+    --el-border-color: #666d76;
+
+    --tnze-bar-outline: #9aa1aa;
+}
