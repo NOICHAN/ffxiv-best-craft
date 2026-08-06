@@ -124,6 +124,17 @@ watch(
     { immediate: true },
 );
 
+// 也必須 immediate。上面那個 watch 的 immediate callback 在 setup 期間就「同步」
+// 把 dynRecipeLevel 設成外部值了，而本 watch 註冊在它之後——建立時 seed 的舊值
+// 就已經是那個外部值，之後沒有任何 dep 會再變動，非 immediate 的話這個 callback
+// 永遠不會執行：dynRecipe 恆為 undefined，確認鈕被 :disabled 鎖死，
+// 使用者看到輸入框有值卻仍報「請輸入同步等級」，比不帶入更難理解。
+//
+// 刻意選 immediate 而非「把這個 watch 移到上面那個之前」：後者能生效純粹是靠
+// 註冊順序，日後有人調整順序就會靜默壞掉（同一種隱性耦合）。加 immediate 則
+// 在兩種順序下都正確——若本 watch 反而排在前面，immediate 這次會以
+// dynRecipeLevel == undefined 執行（loadDynRecipe 立即回傳 undefined、不發任何
+// 請求），之後上面那個 watch 寫入外部值時 dep 變動會再觸發一次，結果相同。
 watch(
     [isDynRecipe, dynRecipeLevel, () => props.recipeInfo],
     async ([isDynRecipe, dynRecipeLevel, recipeInfo]) => {
@@ -141,6 +152,7 @@ watch(
             dynRecipeLoading.value = false;
         }
     },
+    { immediate: true },
 );
 
 async function confirm(mode: 'simulator' | 'designer') {
