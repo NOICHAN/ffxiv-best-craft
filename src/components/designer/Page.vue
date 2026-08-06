@@ -47,14 +47,17 @@ const Designer = defineAsyncComponent(() => import('./Designer.vue'));
 const Simulator = defineAsyncComponent(() => import('./Simulator.vue'));
 
 const isCustomRecipe = computed(() => designerStore.content?.job === undefined);
-const attributes = computed(() => {
+// 回傳整列而非只有 value：Simulator 的等級不足面板需要知道要把新等級寫回哪一列
+const gearset = computed<GearsetsRow>(() => {
     const job = designerStore.content?.job;
-    if (job == undefined) return gearsetsStore.default.value;
-    const gearset = gearsetsStore.gearsets.find((v: GearsetsRow) =>
-        v.compatibleJobs.includes(job),
+    if (job == undefined) return gearsetsStore.default;
+    return (
+        gearsetsStore.gearsets.find((v: GearsetsRow) =>
+            v.compatibleJobs.includes(job),
+        ) ?? gearsetsStore.default
     );
-    return (gearset ?? gearsetsStore.default).value;
 });
+const attributes = computed(() => gearset.value.value);
 const errorMessage = ref<string>();
 
 provide(
@@ -117,6 +120,7 @@ function reload() {
                 :recipe="designerStore.content.recipe"
                 :collectable-shop-refine="designerStore.content.collectability"
                 :attributes="attributes"
+                :gearset-id="gearset.id"
             />
         </template>
         <el-empty

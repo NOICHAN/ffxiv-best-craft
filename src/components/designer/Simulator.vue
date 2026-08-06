@@ -46,14 +46,19 @@ import ActionQueueVue from './ActionQueue.vue';
 import AttrEnhSelector from './tabs/AttrEnhSelector.vue';
 import { displayJobKey } from './injectionkeys';
 import useStore from '@/stores/designer';
+import useGearsetsStore from '@/stores/gearsets';
+import { choiceGearsetDisplayName, GearsetsRow } from '@/libs/Gearsets';
+import LevelRequirementPanel from './LevelRequirementPanel.vue';
 
 const props = defineProps<{
     recipe: Recipe;
     item: Item;
     attributes: Attributes;
+    gearsetId: number;
     collectableShopRefine?: CollectablesShopRefine;
 }>();
 const store = useStore();
+const gearsetsStore = useGearsetsStore();
 const displayJob = inject(displayJobKey) as Ref<Jobs>;
 
 interface Slot {
@@ -85,9 +90,45 @@ const enhancedAttributes = computed<Attributes>(() => {
         craft_points,
     };
 });
+// 遊戲規則：配方等級最多可高於玩家等級 5 級。
+// 與 src-libs/src/lib.rs 的 `recipe.job_level > attrs.level + 5` 同一條規則，
+// 兩邊改動必須同步。
+const LEVEL_TOLERANCE = 5;
+
+const levelShortfall = computed(() => {
+    const need = props.recipe.job_level;
+    const have = enhancedAttributes.value.level;
+    return need > have + LEVEL_TOLERANCE ? { need, have } : undefined;
+});
+
+// 等級不足時模板不會渲染主體，這裡把等級墊高只是為了讓 setup 頂層的 await 與
+// 下方的 watch 不致拋錯——那會被 Page.vue 的 onErrorCaptured 接走，整頁換成
+// 錯誤畫面。使用者修正等級後 watch 會以真實屬性重算。
+function attributesForSimulation(
+    attrs: Attributes,
+    recipe: Recipe,
+): Attributes {
+    const minLevel = recipe.job_level - LEVEL_TOLERANCE;
+    return attrs.level >= minLevel ? attrs : { ...attrs, level: minLevel };
+}
+
+const currentGearsetRow = computed(
+    () =>
+        gearsetsStore.gearsets.find(
+            (v: GearsetsRow) => v.id == props.gearsetId,
+        ) ?? gearsetsStore.default,
+);
+const currentGearsetName = computed(() =>
+    choiceGearsetDisplayName(currentGearsetRow.value),
+);
+
+function applyGearsetLevel(level: number) {
+    currentGearsetRow.value.value.level = level;
+}
+
 const initStatus = ref<Status>({
     ...(await newStatus(
-        enhancedAttributes.value,
+        attributesForSimulation(enhancedAttributes.value, props.recipe),
         props.recipe,
         store.content?.stellarSteadyHandCount ?? 0,
     )),
@@ -96,7 +137,7 @@ const initStatus = ref<Status>({
 watch([props, enhancedAttributes], async ([p, attr]) => {
     initStatus.value = {
         ...(await newStatus(
-            attr,
+            attributesForSimulation(attr, p.recipe),
             p.recipe,
             store.content?.stellarSteadyHandCount ?? 0,
         )),
@@ -181,7 +222,15 @@ function leaveAction() {
 </script>
 
 <template>
-    <div class="main-page">
+    <LevelRequirementPanel
+        v-if="levelShortfall"
+        :need="levelShortfall.need"
+        :have="levelShortfall.have"
+        :gearset-name="currentGearsetName"
+        :sync-level="store.content?.syncLevel"
+        @apply-level="applyGearsetLevel"
+    />
+    <div v-else class="main-page">
         <!-- <el-dialog v-model="openAttrEnhSelector" :title="$t('meal-and-potion')">
             <AttrEnhSelector
                 v-model="attributesEnhancers"
