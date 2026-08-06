@@ -39,6 +39,7 @@ import {
     newRecipe,
     Recipe,
     RecipeInfo,
+    RecipeLevel,
 } from '@/libs/Craft';
 import { useRouter } from 'vue-router';
 import { useFluent } from 'fluent-vue';
@@ -49,6 +50,49 @@ import ConfirmDialog from './ConfirmDialog.vue';
 import useRecipeFavoritesStore from '@/stores/recipe-favorites';
 
 const searchingDelayMs = 200;
+
+// 配方等級表快取。rlv 表是靜態不變的資料（同一個 rlv 永遠對應同一張表），
+// 因此可以無限期快取。刻意放在「模組層級」而非元件層級，讓跨頁、
+// 跨元件實例都能重用——否則每次換頁／搜尋都可能對資料來源打出接近列數的
+// 請求（recipeTablePageSize 預設 100、上限 200），而兩個 DataSource 實作
+// 都沒有自己的快取（web-source 直接 fetch、local-source 直接 invoke）。
+// 存的是 Promise 而非結果，順便讓「同一個 key 的併發查詢」共用同一次請求。
+const recipeLevelCache = new Map<number, Promise<RecipeLevel>>();
+const recipeLevelByJobLevelCache = new Map<
+    number,
+    Promise<RecipeLevel | null>
+>();
+
+// 取配方等級表，優先走快取。查詢失敗時把該筆從快取移除，
+// 避免失敗結果被永久快取而卡死後續查詢。
+function cachedRecipeLevelTable(
+    ds: DataSource,
+    rlv: number,
+): Promise<RecipeLevel> {
+    let cached = recipeLevelCache.get(rlv);
+    if (cached == undefined) {
+        cached = ds.recipeLevelTable(rlv);
+        cached.catch(() => recipeLevelCache.delete(rlv));
+        recipeLevelCache.set(rlv, cached);
+    }
+    return cached;
+}
+
+// 同上，但以同步等級（job level）為 key。
+// 呼叫端必須先 feature-detect ds.recipeLevelTablebyJobLevel 再進來。
+function cachedRecipeLevelTableByJobLevel(
+    fetchTable: (jobLevel: number) => Promise<RecipeLevel | null>,
+    jobLevel: number,
+): Promise<RecipeLevel | null> {
+    let cached = recipeLevelByJobLevelCache.get(jobLevel);
+    if (cached == undefined) {
+        cached = fetchTable(jobLevel);
+        cached.catch(() => recipeLevelByJobLevelCache.delete(jobLevel));
+        recipeLevelByJobLevelCache.set(jobLevel, cached);
+    }
+    return cached;
+}
+
 const settingStore = useSettingsStore();
 const router = useRouter();
 const { $t } = useFluent();
@@ -200,19 +244,37 @@ async function loadDifficulties(
     syncLv: number | undefined,
 ) {
     const requestId = ++difficultyRequestId;
+    const dynRows = rows.filter(isDynamicRecipe);
+    const staticRows = rows.filter(row => !isDynamicRecipe(row));
+
+    // 先把等級同步配方那幾列退回「—」。它們的難度取決於 syncLevel，而改動
+    // syncLevel 時列的 id 並不會變，若不先清掉，新結果回來前畫面會持續顯示
+    // 用「舊同步等級」算出的難度——一個看起來合理但錯誤的數字，比「—」更糟。
+    // 一般配方的難度與 syncLevel 無關，且換頁／換篩選時 id 自然改變，
+    // 會自己退化成「—」，不需要清（清了反而在快取命中時徒增閃爍）。
+    if (dynRows.length > 0) {
+        const cleared = new Map(difficultyMap.value);
+        for (const row of dynRows) {
+            cleared.delete(row.id);
+        }
+        difficultyMap.value = cleared;
+    }
+
     const next = new Map<number, number>();
     try {
         const ds = await settingStore.getDataSource();
-        const dynRows = rows.filter(isDynamicRecipe);
-        const staticRows = rows.filter(row => !isDynamicRecipe(row));
 
         // 等級同步配方：整頁共用同一個同步等級，因此只查一次配方等級表
         const dynTask = (async () => {
             if (dynRows.length == 0 || syncLv == undefined) return;
             // recipeLevelTablebyJobLevel 是 DataSource 的 optional 成員，呼叫前必須偵測
-            if (ds.recipeLevelTablebyJobLevel == undefined) return;
+            const fetchTable = ds.recipeLevelTablebyJobLevel;
+            if (fetchTable == undefined) return;
             try {
-                const rlv = await ds.recipeLevelTablebyJobLevel(syncLv);
+                const rlv = await cachedRecipeLevelTableByJobLevel(
+                    fetchTable.bind(ds),
+                    syncLv,
+                );
                 if (rlv == null) return;
                 for (const row of dynRows) {
                     const r = await newRecipe(
@@ -229,13 +291,17 @@ async function loadDifficulties(
             }
         })();
 
-        // 一般配方：依 rlv 去重，同一個 rlv 的所有列共用同一次查詢
+        // 一般配方：依 rlv 去重，同一個 rlv 的所有列共用同一次查詢；
+        // 再經由 cachedRecipeLevelTable 走跨頁快取，換頁時通常一次請求都不用發
         const uniqueRlvs = [...new Set(staticRows.map(row => row.rlv))];
         const staticTask = (async () => {
             const entries = await Promise.all(
                 uniqueRlvs.map(async rlv => {
                     try {
-                        return [rlv, await ds.recipeLevelTable(rlv)] as const;
+                        return [
+                            rlv,
+                            await cachedRecipeLevelTable(ds, rlv),
+                        ] as const;
                     } catch (e: any) {
                         console.error(
                             `Failed to load recipe level table ${rlv}`,
@@ -272,6 +338,18 @@ async function loadDifficulties(
 watch([displayTable, syncLevel], ([rows, syncLv]) => {
     loadDifficulties(rows, syncLv);
 });
+
+// 切換資料來源／語系時清空配方等級表快取：不同來源（本地 SQLite／遠端 API）
+// 可能對應不同的遊戲版本，沿用舊快取會顯示過期的難度。
+// 此 watch 註冊在上面那個「切換資料來源就重新搜尋」的 watch 之後，
+// 但 triggerSearch 在第一個 await 就讓出，所以清空必定發生在新的查詢實際發出之前。
+watch(
+    () => [settingStore.dataSource, settingStore.dataSourceLang],
+    () => {
+        recipeLevelCache.clear();
+        recipeLevelByJobLevelCache.clear();
+    },
+);
 
 const confirmDialogVisible = ref(false);
 const recipe = ref<Recipe>();
@@ -445,6 +523,11 @@ function toggleRecipeFavorite(row: RecipeInfo) {
                         @change="triggerSearch"
                     />
                 </el-form-item>
+                <!--
+                    max=100 取的是目前遊戲的職業等級上限。
+                    注意：ConfirmDialog.vue 對應的同步等級輸入框只有 :min="1"、
+                    沒有上限，等級上限提升時兩處會漂移，請一併檢查。
+                -->
                 <el-form-item :label="$t('level-sync')">
                     <el-input-number
                         v-model="syncLevel"
@@ -567,13 +650,19 @@ function toggleRecipeFavorite(row: RecipeInfo) {
 .select-filters {
     flex: 1;
     display: flex;
+    /* 加入第四個篩選項後，窄螢幕（.filter-row 只有視窗寬的 80%）單行放不下，
+       四個 CJK label 幾乎會吃掉整格寬度，故允許換行做優雅降級 */
+    flex-wrap: wrap;
     justify-content: space-evenly;
     align-items: center;
-    gap: 5%;
+    /* 直向間距用固定值：百分比的 row-gap 會以自身高度為基準，不適合這裡 */
+    gap: 8px 5%;
 }
 
 .select-filters :deep(.el-form-item) {
-    flex: 1;
+    /* 基準寬度 150px：寬螢幕時四項的基準相同、又都 grow，等分結果與原本一致；
+       容器不足 4 × 150px 時才換行 */
+    flex: 1 1 150px;
     margin-bottom: 0;
 }
 
