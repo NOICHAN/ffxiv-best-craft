@@ -790,7 +790,7 @@ level = 等级
 name = 名称
 can-hq = 存在HQ
 level-sync = 等级同步
-level-sync-hint = 仅影响「难度」列的显示，且只对宇宙探索的等级同步配方有意义。不会触发搜索。
+level-sync-hint = 仅影响「难度」列的显示。只有月球（宇宙探索）的等级同步配方会用到，其他配方的难度不受此值影响。不会触发搜索。
 
 favorite = 收藏
 unfavorite = 取消收藏
@@ -812,7 +812,7 @@ level = 等級
 name = 名稱
 can-hq = 存在HQ
 level-sync = 等級同步
-level-sync-hint = 僅影響「難度」欄的顯示，且只對宇宙探索的等級同步配方有意義。不會觸發搜尋。
+level-sync-hint = 僅影響「難度」欄的顯示。只有月球（宇宙探索）的等級同步配方會用到，其他配方的難度不受此值影響。不會觸發搜尋。
 
 favorite = 收藏
 unfavorite = 取消收藏
@@ -834,7 +834,7 @@ level = Level
 name = Name
 can-hq = Can HQ
 level-sync = Level Sync
-level-sync-hint = Only affects the Difficulty column, and only for Cosmic Exploration level-sync recipes. It does not trigger a search.
+level-sync-hint = Only affects the Difficulty column. It is used solely by the level-sync recipes of Cosmic Exploration (the Moon); the difficulty of other recipes is unaffected. It does not trigger a search.
 
 favorite = Favorite
 unfavorite = Unfavorite
@@ -856,7 +856,7 @@ level = レベル
 name = アイテム
 can-hq = HQ可
 level-sync = レベルsync
-level-sync-hint = 「必要工数」列の表示にのみ影響し、宇宙探索のレベルsyncレシピにのみ有効です。検索は実行されません。
+level-sync-hint = 「必要工数」列の表示にのみ影響します。月（宇宙探索）のレベルsyncレシピでのみ使用され、他のレシピの必要工数には影響しません。検索は実行されません。
 
 favorite = お気に入り
 unfavorite = お気に入り解除
