@@ -438,7 +438,8 @@ const url = computed(() => {
         }
 
         &.selected {
-            color: var(--tnze-on-fill);
+            /* 底色是 --tnze-fill-primary（藍），故用配對的白字 */
+            color: var(--tnze-on-fill-primary);
         }
 
         &:disabled {

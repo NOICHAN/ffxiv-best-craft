@@ -52,6 +52,15 @@
     --tnze-fill-info: #9d9fa4;
     --tnze-on-fill: #10131a;
 
+    /* primary 填色上的文字（藍底按鈕、radio-button 選中、segmented 選中、
+       checkbox 勾號、分頁器當前頁）。
+       使用者 2026-08-06 明確選擇白字：在 #49a3ff 上白字只有 2.64:1，
+       不符 AAA 也不符 AA——這是知情下的取捨，換取原本的視覺。
+       注意白色已是最亮的顏色，在此底色上不存在更高對比的淺色文字；
+       若日後要恢復合規，唯一的路是把 --tnze-fill-primary 改深
+       （#0053aa 配白字為 7.45:1）。其餘四種語意色不受影響，仍是深字。 */
+    --tnze-on-fill-primary: #ffffff;
+
     /* hover / active 的填色：靜態色值，不用 filter。
        filter 會連 1px 邊框一起提亮，把 --el-border-color 打到 3:1 以下
        （#8b9098 ×1.1 = #999ea7 對白底只有 2.69:1），正好推翻它要修的訴求。
@@ -174,12 +183,12 @@
         .is-dashed
     ) {
     --el-button-bg-color: var(--tnze-fill-primary);
-    --el-button-text-color: var(--tnze-on-fill);
+    --el-button-text-color: var(--tnze-on-fill-primary);
     --el-button-border-color: var(--el-border-color);
-    --el-button-hover-text-color: var(--tnze-on-fill);
+    --el-button-hover-text-color: var(--tnze-on-fill-primary);
     --el-button-hover-bg-color: var(--tnze-fill-primary-hover);
     --el-button-hover-border-color: var(--el-border-color);
-    --el-button-active-text-color: var(--tnze-on-fill);
+    --el-button-active-text-color: var(--tnze-on-fill-primary);
     --el-button-active-bg-color: var(--tnze-fill-primary-active);
     --el-button-active-border-color: var(--el-border-color);
     --el-button-outline-color: var(--el-color-primary);
@@ -264,7 +273,7 @@
    在深色主題把主色調亮後反而退步；一律改用填色角色 + --tnze-on-fill。 */
 :root .el-radio-button {
     --el-radio-button-checked-bg-color: var(--tnze-fill-primary);
-    --el-radio-button-checked-text-color: var(--tnze-on-fill);
+    --el-radio-button-checked-text-color: var(--tnze-on-fill-primary);
     --el-radio-button-checked-border-color: var(--el-border-color);
     --el-radio-button-disabled-checked-fill: var(--tnze-fill-disabled);
 }
@@ -280,7 +289,7 @@
 
 :root .el-segmented {
     --el-segmented-item-selected-bg-color: var(--tnze-fill-primary);
-    --el-segmented-item-selected-color: var(--tnze-on-fill);
+    --el-segmented-item-selected-color: var(--tnze-on-fill-primary);
     --el-segmented-item-selected-disabled-bg-color: var(--tnze-fill-disabled);
 }
 
@@ -289,7 +298,7 @@
    勾號實質消失。比照 --el-radio-button-disabled-checked-fill 改用停用填色 + 深字。 */
 :root .el-checkbox {
     --el-checkbox-checked-bg-color: var(--tnze-fill-primary);
-    --el-checkbox-checked-icon-color: var(--tnze-on-fill);
+    --el-checkbox-checked-icon-color: var(--tnze-on-fill-primary);
     --el-checkbox-disabled-checked-input-fill: var(--tnze-fill-disabled);
     --el-checkbox-disabled-checked-icon-color: var(--tnze-on-fill);
 }
@@ -319,6 +328,8 @@
 }
 :root .el-badge__content--primary {
     background-color: var(--tnze-fill-primary);
+    /* 藍底徽章比照藍底按鈕用白字（見 --tnze-on-fill-primary） */
+    color: var(--tnze-on-fill-primary);
 }
 :root .el-badge__content--success {
     background-color: var(--tnze-fill-success);
@@ -351,5 +362,5 @@
     .el-pagination.is-background
     .btn-next.is-active:not(.is-disabled):not(:disabled) {
     background-color: var(--tnze-fill-primary);
-    color: var(--tnze-on-fill);
+    color: var(--tnze-on-fill-primary);
 }
