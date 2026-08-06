@@ -64,3 +64,8 @@ jobs:
             - name: deploy to GitHub Pages
               id: deployment
               uses: actions/deploy-pages@v4
+              with:
+                  # 預設是 10 分鐘。正常情況下這步只要幾十秒；會拖到逾時代表
+                  # GitHub 的 Pages 發佈管線沒有接手（狀態一直停在 deployment_queued），
+                  # 那不是等久一點就會好的事，所以縮短成 5 分鐘早點拿到結果。
+                  timeout: 300000
