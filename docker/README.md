@@ -20,6 +20,28 @@ docker compose -f docker-compose.dev.yml up
 | 前端 | <http://localhost:5173> | Vite dev server |
 | API | <http://localhost:8080> | 自架資料源，僅簡體中文 |
 
+### 讓它常駐（開機自動起來）
+
+兩個服務都設了 `restart: unless-stopped`，所以只要**用背景模式起過一次**，
+之後 Docker Desktop 或主機重開都會自己回來，不用再手動 `up`：
+
+```bash
+docker compose -f docker-compose.dev.yml up -d
+```
+
+前提是 Docker Desktop 本身會自動啟動（Settings → General →
+_Start Docker Desktop when you sign in_）。restart policy 是 daemon 在執行的，
+daemon 沒起來就沒有人叫醒容器。
+
+真的想讓它停著別再自己回來，用 `stop`（不要用 `down`，`down` 會連容器一起刪掉）：
+
+```bash
+docker compose -f docker-compose.dev.yml stop
+```
+
+`unless-stopped` 記得住這個「是你手動停的」狀態，下次開機就不會擅自拉起來；
+要恢復常駐再 `up -d` 一次即可。
+
 ## 資料來源：預設走線上 API
 
 前端**預設打官方的 <https://tnze.yyyy.games/api/datasource/>**，六個語系都能用

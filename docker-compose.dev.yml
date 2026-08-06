@@ -14,6 +14,10 @@ services:
     web:
         <<: *image
         working_dir: /app
+        # Docker Desktop / 主機重開後自動拉回來。沒有這行的話預設是 no，
+        # 容器會停在 stopped 不動，每次都要手動 up 一次。
+        # unless-stopped：只有你自己下過 stop 才不會被叫醒。
+        restart: unless-stopped
         environment:
             VITE_BESTCRAFT_TARGET: web
             # bind mount 在 Windows 上收不到 inotify 事件，必須改用輪詢才有 hot reload
@@ -50,6 +54,7 @@ services:
     api:
         <<: *image
         working_dir: /app
+        restart: unless-stopped
         environment:
             # 以 git CLI 取代 libgit2 抓取相依，處理 tag 釘選的 git 相依比較可靠
             CARGO_NET_GIT_FETCH_WITH_CLI: 'true'
