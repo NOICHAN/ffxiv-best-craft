@@ -44,6 +44,8 @@ import useGearsetsStore from '@/stores/gearsets';
 import { DataSource } from '@/datasource/source';
 import AttrEnhSelectorOption from './AttrEnhSelectorOption.vue';
 import { choiceGearsetDisplayName, GearsetsRow } from '@/libs/Gearsets';
+import BlockLoadError from '../BlockLoadError.vue';
+import { describeError } from '../errors';
 
 const Gearset = defineAsyncComponent(() => import('@/components/Gearset.vue'));
 
@@ -54,6 +56,10 @@ const meals = ref<Enhancer[]>();
 const medicine = ref<Enhancer[]>();
 const mealSearchKeyword = ref('');
 const medicineSearchKeyword = ref('');
+const loading = ref(false);
+const loadError = ref<string>();
+// 遞增即可觸發重載；納入下方 watch 的相依
+const retryToken = ref(0);
 
 const 专家之证: Enhancer = {
     cm: Number.MAX_VALUE,
@@ -79,8 +85,10 @@ const emits = defineEmits<{
     (event: 'update:modelValue', v: Enhancer[]): void;
 }>();
 
-onMounted(async () => loadMealsAndMedicine(setting.getDataSource()));
-watch(() => setting.getDataSource(), loadMealsAndMedicine);
+onMounted(() => loadMealsAndMedicine(setting.getDataSource()));
+watch([() => setting.getDataSource(), retryToken], ([ds]) =>
+    loadMealsAndMedicine(ds),
+);
 
 const gearsetsList = computed<GearsetsRow[]>(() => {
     const craftType = props.job;
@@ -89,8 +97,19 @@ const gearsetsList = computed<GearsetsRow[]>(() => {
 });
 
 async function loadMealsAndMedicine(datasource: Promise<DataSource>) {
-    let ds = await datasource;
-    await Promise.all([loadMeals(ds), loadMedicines(ds)]);
+    loading.value = true;
+    loadError.value = undefined;
+    try {
+        const ds = await datasource;
+        await Promise.all([loadMeals(ds), loadMedicines(ds)]);
+    } catch (err) {
+        // 就地顯示並提供重試，絕不往上冒泡：這個 rejection 會被 Page.vue 的
+        // onErrorCaptured 接走，把整個製作介面換成錯誤畫面，而食藥清單只是
+        // 一個分頁的內容，不該有這種殺傷力。
+        loadError.value = describeError(err, $t);
+    } finally {
+        loading.value = false;
+    }
 }
 
 async function loadMeals(ds: DataSource) {
@@ -161,6 +180,11 @@ function EnhIncComponent(props: {
 
 <template>
     <el-form :model="enhancers" label-width="auto">
+        <BlockLoadError
+            v-if="loadError"
+            :message="loadError"
+            @retry="retryToken++"
+        />
         <el-form-item :label="$t('meal')">
             <el-select-v2
                 v-model="enhancers.meal"
@@ -170,7 +194,7 @@ function EnhIncComponent(props: {
                 filterable
                 remote
                 :remote-method="(kw: string) => (mealSearchKeyword = kw)"
-                :loading="!meals"
+                :loading="loading"
                 :item-height="50"
             >
                 <template #default="{ item }">
@@ -194,7 +218,7 @@ function EnhIncComponent(props: {
                 filterable
                 remote
                 :remote-method="(kw: string) => (medicineSearchKeyword = kw)"
-                :loading="!medicine"
+                :loading="loading"
                 :item-height="50"
             >
                 <template #default="{ item }">
