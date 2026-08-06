@@ -47,6 +47,9 @@ const props = defineProps<{
     itemInfo: Item;
     collectability?: CollectablesShopRefine;
     stellarSteadyHandCount: number;
+    // 外部（配方清單）已填的等級同步值，僅作為 dynRecipeLevel 的初始值帶入，
+    // 使用者在對話框內仍可自由修改，不會回寫給外部。未傳入時行為與過去相同。
+    syncLevel?: number;
 }>();
 const router = useRouter();
 const { $t } = useFluent();
@@ -95,6 +98,16 @@ async function loadDynRecipe(
         recipeInfo.durability_factor,
     );
 }
+
+// 元件由 v-if="recipe && recipeInfo && itemInfo" 控制，一旦三者皆有值就會保持掛載，
+// 換配方時不一定會重建元件，所以不能只在 ref() 初始化時取用 props.syncLevel 一次。
+// 這裡在「對話框開啟」或「recipeInfo 換掉」時，把外部值重新帶入作為初始值；
+// 使用者在對話框開著的期間自行修改 dynRecipeLevel 不會被這裡覆蓋。
+watch([visible, () => props.recipeInfo], ([isVisible]) => {
+    if (isVisible) {
+        dynRecipeLevel.value = props.syncLevel;
+    }
+});
 
 watch(
     [isDynRecipe, dynRecipeLevel, () => props.recipeInfo],

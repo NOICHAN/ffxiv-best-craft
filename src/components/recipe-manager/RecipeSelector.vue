@@ -463,6 +463,7 @@ function toggleRecipeFavorite(row: RecipeInfo) {
             :item-info="itemInfo"
             :collectability="collectability"
             :stellarSteadyHandCount="stellarSteadyHandCount"
+            :sync-level="syncLevel"
         />
         <el-input
             v-model="searchText"
