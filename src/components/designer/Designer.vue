@@ -27,7 +27,13 @@ import {
     ref,
     watch,
 } from 'vue';
-import { ElScrollbar, ElAlert, ElTabs, ElTabPane } from 'element-plus';
+import {
+    ElScrollbar,
+    ElAlert,
+    ElTabs,
+    ElTabPane,
+    ElMessage,
+} from 'element-plus';
 import { useMediaQuery, useElementSize } from '@vueuse/core';
 
 import {
@@ -63,6 +69,7 @@ import Analyzers from './tabs/Analyzers.vue';
 import { activeSeqKey, displayJobKey } from './injectionkeys';
 import { Slot, Sequence, SequenceSource } from './types';
 import MarcoInfo from './MarcoInfo.vue';
+import { describeError } from './errors';
 
 const props = defineProps<{
     recipe: Recipe;
@@ -217,7 +224,9 @@ const activeSeq = reactive<Sequence>({
     maxid: 0,
 });
 const activeRst = ref<SimulateResult>();
-simulate(initStatus.value, []).then(v => (activeRst.value = v));
+simulate(initStatus.value, [])
+    .then(v => (activeRst.value = v))
+    .catch(err => ElMessage.error(describeError(err, $t)));
 
 provide(activeSeqKey, ref(activeSeq));
 const actions = computed(() => activeSeq.slots.map(slot => slot.action));
@@ -250,10 +259,20 @@ watch(initStatus, readSolver);
 // Saved Sequence
 watch(initStatus, async newInitStatus => {
     // re-simulate activeSeq
-    activeRst.value = await simulate(newInitStatus, actions.value);
+    try {
+        activeRst.value = await simulate(newInitStatus, actions.value);
+    } catch (err) {
+        // 刻意不清空 activeRst：清掉會讓狀態列整個變空白，
+        // 保留上一次的結果再配一則提示比較不會讓人以為是自己弄壞的
+        ElMessage.error(describeError(err, $t));
+    }
 });
 watch(actions, async a => {
-    activeRst.value = await simulate(initStatus.value, a);
+    try {
+        activeRst.value = await simulate(initStatus.value, a);
+    } catch (err) {
+        ElMessage.error(describeError(err, $t));
+    }
 });
 
 const displayedStatus = computed(() => {

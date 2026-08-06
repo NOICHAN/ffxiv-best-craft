@@ -51,8 +51,11 @@ import {
 import Buffs from '../Buffs.vue';
 import * as d3 from 'd3';
 import { ref, computed, watch, reactive } from 'vue';
+import { useFluent } from 'fluent-vue';
 import useStore from '@/stores/designer';
 import Action from '../Action.vue';
+import BlockLoadError from '../BlockLoadError.vue';
+import { describeError } from '../errors';
 
 const props = defineProps<{
     initStatus: Status;
@@ -60,6 +63,7 @@ const props = defineProps<{
     collectableShopRefine?: CollectablesShopRefine;
 }>();
 const store = useStore();
+const { $t } = useFluent();
 const defaultSimulationCounts = 1000;
 const maximiumSimulatonPow = 5;
 
@@ -68,6 +72,11 @@ const simulationButtonDisabled = ref(false);
 const options = reactive(store.options.analyzerOptions);
 
 const attributesScope = ref<Scope>();
+// 三個分析工作互相獨立，各自記錄錯誤，避免其中一個失敗時
+// 在另一個成功的結果上蓋錯誤訊息
+const simulationError = ref<string>();
+const scopeError = ref<string>();
+const detailError = ref<string>();
 
 const showCheckSimulateDetail = ref(false);
 const simulateDetailResult = ref<SimulateDetailRow[]>([]);
@@ -86,6 +95,7 @@ interface SimulateDetailRow {
 async function runBatchSimulatios(n: number) {
     simulationResult.value = undefined;
     simulationButtonDisabled.value = true;
+    simulationError.value = undefined;
     try {
         if (props.collectableShopRefine == undefined) {
             simulationResult.value = await rand_simulation(
@@ -103,59 +113,72 @@ async function runBatchSimulatios(n: number) {
                 props.collectableShopRefine,
             );
         }
+    } catch (err) {
+        // 原本沒有 catch，而呼叫點在 setTimeout 內，rejection 不經過 Vue，
+        // 使用者只會看到一片空白、毫無提示。
+        simulationError.value = describeError(err, $t);
     } finally {
         simulationButtonDisabled.value = false;
     }
 }
 
 async function calcScope() {
+    scopeError.value = undefined;
     try {
         attributesScope.value = await calc_attributes_scope(
             props.initStatus,
             props.actions,
         );
-    } catch {}
+    } catch (err) {
+        // 原本是 `catch {}`，完全吞掉，失敗與「還沒算」無從分辨
+        scopeError.value = describeError(err, $t);
+    }
 }
 
 async function runSimulateDetail() {
-    const result = await simulateDetail(props.initStatus, props.actions);
-    const details: SimulateDetailRow[] = [
-        {
-            step: props.initStatus.step,
-            progress: props.initStatus.progress,
-            quality: props.initStatus.quality,
-            craft_points: props.initStatus.craft_points,
-            durability: props.initStatus.durability,
-            buffs: props.initStatus.buffs,
-        },
-    ];
-    for (const i in props.actions) {
-        if ('Err' in result[i]) {
-            const error: string = result[i].Err;
-            details.push({
-                step: NaN,
-                action: props.actions[i],
-                progress: NaN,
-                quality: NaN,
-                craft_points: NaN,
-                durability: NaN,
-                error,
-            });
-        } else if ('Ok' in result[i]) {
-            const s: Status = result[i].Ok;
-            details.push({
-                step: s.step,
-                action: props.actions[i],
-                progress: s.progress,
-                quality: s.quality,
-                craft_points: s.craft_points,
-                durability: s.durability,
-                buffs: s.buffs,
-            });
+    detailError.value = undefined;
+    try {
+        const result = await simulateDetail(props.initStatus, props.actions);
+        const details: SimulateDetailRow[] = [
+            {
+                step: props.initStatus.step,
+                progress: props.initStatus.progress,
+                quality: props.initStatus.quality,
+                craft_points: props.initStatus.craft_points,
+                durability: props.initStatus.durability,
+                buffs: props.initStatus.buffs,
+            },
+        ];
+        for (const i in props.actions) {
+            if ('Err' in result[i]) {
+                const error: string = result[i].Err;
+                details.push({
+                    step: NaN,
+                    action: props.actions[i],
+                    progress: NaN,
+                    quality: NaN,
+                    craft_points: NaN,
+                    durability: NaN,
+                    error,
+                });
+            } else if ('Ok' in result[i]) {
+                const s: Status = result[i].Ok;
+                details.push({
+                    step: s.step,
+                    action: props.actions[i],
+                    progress: s.progress,
+                    quality: s.quality,
+                    craft_points: s.craft_points,
+                    durability: s.durability,
+                    buffs: s.buffs,
+                });
+            }
         }
+        simulateDetailResult.value = details;
+        showCheckSimulateDetail.value = true;
+    } catch (err) {
+        detailError.value = describeError(err, $t);
     }
-    simulateDetailResult.value = details;
-    showCheckSimulateDetail.value = true;
 }
 
 function simulateDetailSpanMethod(data: {
@@ -256,6 +279,12 @@ const arcLabel = d3
                 </template>
             </el-dropdown>
         </el-form-item>
+        <el-form-item v-if="simulationError">
+            <BlockLoadError
+                :message="simulationError"
+                @retry="runBatchSimulatios(defaultSimulationCounts)"
+            />
+        </el-form-item>
         <Transition>
             <el-form-item v-if="simulationResult">
                 <svg
@@ -313,6 +342,9 @@ const arcLabel = d3
         <el-divider />
         <el-form-item>
             <el-button @click="calcScope">{{ $t('calc-scope') }}</el-button>
+        </el-form-item>
+        <el-form-item v-if="scopeError">
+            <BlockLoadError :message="scopeError" @retry="calcScope()" />
         </el-form-item>
         <Transition>
             <el-form-item
@@ -414,6 +446,12 @@ const arcLabel = d3
                     </el-table>
                 </el-scrollbar>
             </el-drawer>
+        </el-form-item>
+        <el-form-item v-if="detailError">
+            <BlockLoadError
+                :message="detailError"
+                @retry="runSimulateDetail()"
+            />
         </el-form-item>
     </el-form>
 </template>
