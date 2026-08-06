@@ -45,10 +45,10 @@ jobs:
               env:
                   VITE_BASE_PATH: /${{ github.event.repository.name }}/
               run: pnpm i && pnpm run build-web
-            - name: setup pages
-              uses: actions/configure-pages@v5
-              with:
-                  enablement: true
+            # 這裡刻意不用 actions/configure-pages —— 它的輸出我們沒用到（base 由
+            # VITE_BASE_PATH 自己給），而它的 enablement 選項需要 admin 權限，
+            # 內建的 GITHUB_TOKEN 沒有，只會讓整個 job 失敗。
+            # 前提：repo 的 Settings → Pages → Source 要設成 GitHub Actions。
             - name: upload artifact
               uses: actions/upload-pages-artifact@v3
               with:
