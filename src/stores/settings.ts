@@ -40,7 +40,7 @@ export type DataSourceLangID =
 
 export const dataSourceList: Map<string, DataSourceLangID[]> = new Map([
     ['local', []],
-    ['yyyy.games', ['zh-CN', 'zh-TW', 'en', 'de', 'fr', 'ja']],
+    ['yyyy.games', ['zh-TW', 'zh-CN', 'en', 'de', 'fr', 'ja']],
     // ['xivapi', ['en', 'de', 'fr', 'ja']],
     // ['cafe-xivapi', ['zh-CN', 'zh-TW', 'ja', 'en', 'de', 'fr', 'ko']],
 ]);
