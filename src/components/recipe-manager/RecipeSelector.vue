@@ -66,6 +66,14 @@ const filterLevel = ref<number>();
 const craftTypeOptions = ref<CraftType[]>([]);
 const filterRecipeLevel = ref<number>();
 const stellarSteadyHandCount = ref<number>(0);
+// 等級同步：月球（宇宙探索）配方的難度取決於此值，未填時該類配方的難度欄顯示為「—」
+// 此控制項不觸發搜尋，只影響難度欄的顯示
+const syncLevel = ref<number>();
+// 難度對照表：key 為配方 id，value 為算好的難度；查不到的列在畫面上顯示「—」
+const difficultyMap = ref<Map<number, number>>(new Map());
+// 遞增的請求序號，用來丟棄過期結果（快速切換分頁／篩選／同步等級時，
+// 舊查詢可能晚於新查詢返回，只有最後發出的那次才能寫回 difficultyMap）
+let difficultyRequestId = 0;
 
 const recipeFavoritesStore = useRecipeFavoritesStore();
 
@@ -171,6 +179,98 @@ watchEffect(() => {
     if (recipeId !== undefined) {
         selectRecipeById(Number(recipeId));
     }
+});
+
+// 判定是否為等級同步配方（宇宙探索 A 級以下配方存在等級同步規則）。
+// 注意：此判定與 ConfirmDialog.vue 的 isDynRecipe 相同，兩處必須同步維護。
+// 之所以刻意重複而非抽出共用函式，是因為兩者的資料來源不同
+// （ConfirmDialog 讀 props.recipeInfo，這裡讀表格傳入的 row），
+// 而要共用就必須改動 src/libs/，不在本次變更範圍內。
+function isDynamicRecipe(row: RecipeInfo): boolean {
+    const notebook = row.recipe_notebook_list;
+    const range1 = notebook >= 1496 && notebook <= 1503;
+    const range2 = notebook >= 1528 && notebook <= 1535;
+    return (range1 || range2) && row.rlv == 690;
+}
+
+// 計算目前這頁每一列的難度。
+// 難度一律交給 @/libs/Craft 的 newRecipe 換算（純算術、無 wasm），不自行複製公式。
+async function loadDifficulties(
+    rows: RecipeInfo[],
+    syncLv: number | undefined,
+) {
+    const requestId = ++difficultyRequestId;
+    const next = new Map<number, number>();
+    try {
+        const ds = await settingStore.getDataSource();
+        const dynRows = rows.filter(isDynamicRecipe);
+        const staticRows = rows.filter(row => !isDynamicRecipe(row));
+
+        // 等級同步配方：整頁共用同一個同步等級，因此只查一次配方等級表
+        const dynTask = (async () => {
+            if (dynRows.length == 0 || syncLv == undefined) return;
+            // recipeLevelTablebyJobLevel 是 DataSource 的 optional 成員，呼叫前必須偵測
+            if (ds.recipeLevelTablebyJobLevel == undefined) return;
+            try {
+                const rlv = await ds.recipeLevelTablebyJobLevel(syncLv);
+                if (rlv == null) return;
+                for (const row of dynRows) {
+                    const r = await newRecipe(
+                        rlv,
+                        row.difficulty_factor,
+                        row.quality_factor,
+                        row.durability_factor,
+                    );
+                    next.set(row.id, r.difficulty);
+                }
+            } catch (e: any) {
+                // 查詢失敗時這些列維持「—」，不打斷整個表格、也不彈錯誤訊息
+                console.error('Failed to load synced recipe level table', e);
+            }
+        })();
+
+        // 一般配方：依 rlv 去重，同一個 rlv 的所有列共用同一次查詢
+        const uniqueRlvs = [...new Set(staticRows.map(row => row.rlv))];
+        const staticTask = (async () => {
+            const entries = await Promise.all(
+                uniqueRlvs.map(async rlv => {
+                    try {
+                        return [rlv, await ds.recipeLevelTable(rlv)] as const;
+                    } catch (e: any) {
+                        console.error(
+                            `Failed to load recipe level table ${rlv}`,
+                            e,
+                        );
+                        return [rlv, undefined] as const;
+                    }
+                }),
+            );
+            const tables = new Map(entries);
+            for (const row of staticRows) {
+                const rlv = tables.get(row.rlv);
+                if (rlv == undefined) continue;
+                const r = await newRecipe(
+                    rlv,
+                    row.difficulty_factor,
+                    row.quality_factor,
+                    row.durability_factor,
+                );
+                next.set(row.id, r.difficulty);
+            }
+        })();
+
+        await Promise.all([dynTask, staticTask]);
+    } catch (e: any) {
+        console.error('Failed to load recipe difficulties', e);
+    }
+    // 只有最後一次發出的請求能寫回結果，避免過期結果蓋掉新資料
+    if (requestId == difficultyRequestId) {
+        difficultyMap.value = next;
+    }
+}
+
+watch([displayTable, syncLevel], ([rows, syncLv]) => {
+    loadDifficulties(rows, syncLv);
 });
 
 const confirmDialogVisible = ref(false);
@@ -345,6 +445,17 @@ function toggleRecipeFavorite(row: RecipeInfo) {
                         @change="triggerSearch"
                     />
                 </el-form-item>
+                <el-form-item :label="$t('level-sync')">
+                    <el-input-number
+                        v-model="syncLevel"
+                        clearable
+                        :min="1"
+                        :max="100"
+                        :step="1"
+                        step-strictly
+                        :controls="false"
+                    />
+                </el-form-item>
             </el-form>
         </div>
         <el-table
@@ -401,6 +512,14 @@ function toggleRecipeFavorite(row: RecipeInfo) {
                 :label="$t('type')"
                 :width="compactLayout ? undefined : 200"
             />
+            <el-table-column
+                :label="$t('difficulty')"
+                :width="compactLayout ? undefined : 90"
+            >
+                <template #default="{ row }">
+                    {{ difficultyMap.get((row as RecipeInfo).id) ?? '—' }}
+                </template>
+            </el-table-column>
             <el-table-column prop="item_name" :label="$t('name')" />
         </el-table>
         <el-pagination
@@ -477,6 +596,7 @@ craft-type = 制作类型
 level = 等级
 name = 名称
 can-hq = 存在HQ
+level-sync = 等级同步
 
 favorite = 收藏
 unfavorite = 取消收藏
@@ -497,6 +617,7 @@ craft-type = 製作職業
 level = 等級
 name = 名稱
 can-hq = 存在HQ
+level-sync = 等級同步
 
 favorite = 收藏
 unfavorite = 取消收藏
@@ -517,6 +638,7 @@ craft-type = Craft Type
 level = Level
 name = Name
 can-hq = Can HQ
+level-sync = Level Sync
 
 favorite = Favorite
 unfavorite = Unfavorite
@@ -537,6 +659,7 @@ craft-type = 製作タイプ
 level = レベル
 name = アイテム
 can-hq = HQ可
+level-sync = レベルsync
 
 favorite = お気に入り
 unfavorite = お気に入り解除
