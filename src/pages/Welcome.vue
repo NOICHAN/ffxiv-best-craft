@@ -22,7 +22,9 @@ import { computed, onActivated, ref } from 'vue';
 import { useFluent } from 'fluent-vue';
 import { isWebsite, isYYYYGames } from '@/libs/Consts';
 import { activeEggs } from '@/eastereggs';
-import DesktopEditionDownload from '@/components/DesktopEditionDownload.vue';
+// 2026-08-06 依需求移除嚮導頁的「下載桌面客戶端」按鈕。
+// 元件檔本身保留，之後要恢復只需解除本檔三處註解（import、ref、樣板）。
+// import DesktopEditionDownload from '@/components/DesktopEditionDownload.vue';
 
 const emit = defineEmits<{
     (e: 'setTitle', title: string): void;
@@ -43,11 +45,12 @@ const time = computed<
     else if (hour >= 19 && hour < 21) return 'evening';
     else return 'night';
 });
-const showDesktopEditionDownload = ref(false);
+// const showDesktopEditionDownload = ref(false);
 </script>
 
 <template>
     <div class="container">
+        <!-- 下載桌面客戶端的彈窗，已依需求移除
         <el-dialog
             v-if="isWebsite"
             v-model="showDesktopEditionDownload"
@@ -55,6 +58,7 @@ const showDesktopEditionDownload = ref(false);
         >
             <DesktopEditionDownload />
         </el-dialog>
+        -->
         <div class="greeting-box">
             <el-text class="greeting">
                 {{ cks ? cks : $t('welcome', { time }) }}
@@ -77,6 +81,7 @@ const showDesktopEditionDownload = ref(false);
             >
                 {{ egg.t1 }}
             </el-button>
+            <!-- 下載桌面客戶端按鈕，已依需求移除
             <el-button
                 v-if="isWebsite"
                 size="large"
@@ -84,6 +89,7 @@ const showDesktopEditionDownload = ref(false);
             >
                 {{ $t('download-desktop-edition') }}
             </el-button>
+            -->
         </div>
         <el-link
             v-if="isWebsite && isYYYYGames"

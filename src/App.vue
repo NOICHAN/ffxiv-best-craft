@@ -48,7 +48,9 @@ import useRecipeFavoritesStore from '@/stores/recipe-favorites';
 import { elementPlusLang, languages } from './lang';
 import { selectLanguage } from './fluent';
 import { useRouter } from 'vue-router';
-import DesktopEditionDownload from './components/DesktopEditionDownload.vue';
+// 2026-08-06 依需求移除全站的「下載桌面客戶端」入口。
+// 元件檔本身保留，之後要恢復只需解除本檔三處註解（import、ref、樣板）。
+// import DesktopEditionDownload from './components/DesktopEditionDownload.vue';
 
 const { $t } = useFluent();
 const colorMode = useColorMode().store;
@@ -61,7 +63,7 @@ const bgColor = useCssVar('--app-bg-color', ref(null));
 const bgMicaColor = useCssVar('--tnze-mica-bg-color', ref(null));
 
 const router = useRouter();
-const showDesktopEditionDownload = ref(false);
+// const showDesktopEditionDownload = ref(false);
 const showMenu = ref(false);
 const topTitle = ref('');
 const unfoldSidebar = useMediaQuery('screen and (min-width: 760px)');
@@ -188,6 +190,7 @@ watchEffect(async () => {
 
 <template>
     <el-config-provider :locale="elementPlusLang.get(lang)">
+        <!-- 下載桌面客戶端的彈窗，已依需求移除
         <el-dialog
             v-if="isWebsite"
             v-model="showDesktopEditionDownload"
@@ -195,6 +198,7 @@ watchEffect(async () => {
         >
             <DesktopEditionDownload />
         </el-dialog>
+        -->
         <div class="container">
             <Transition>
                 <div
@@ -205,6 +209,7 @@ watchEffect(async () => {
             </Transition>
             <div class="sidebar" v-bind:class="{ 'show-menu': showMenu }">
                 <Menu></Menu>
+                <!-- 側邊欄底部的下載桌面客戶端連結，已依需求移除
                 <div v-if="isWebsite" class="download-desktop-link">
                     <el-link
                         @click="showDesktopEditionDownload = true"
@@ -213,6 +218,7 @@ watchEffect(async () => {
                         {{ $t('download-desktop-edition') }}
                     </el-link>
                 </div>
+                -->
             </div>
             <div class="main">
                 <div class="topbar">
@@ -364,10 +370,12 @@ watchEffect(async () => {
     transform: translateX(0);
 }
 
+/* 隨側邊欄的下載連結一併停用
 .download-desktop-link {
     padding: 10px 6px;
     text-align: center;
 }
+*/
 
 .topbar {
     height: var(--tnze-topbar-height);

@@ -38,7 +38,9 @@ import { languages } from '../lang';
 import { useColorMode } from '@vueuse/core';
 import { isTauri, isWebsite, isYYYYGames } from '@/libs/Consts';
 import { openUrl } from '@/libs/Utils';
-import FeedbackEmail from '@/components/FeedbackEmail.vue';
+// 2026-08-06 依需求移除「反饋 / 聊天」整列（含 QQ 群聊連結）。
+// 元件檔本身保留，之後要恢復只需解除本檔兩處註解（import、樣板）。
+// import FeedbackEmail from '@/components/FeedbackEmail.vue';
 import SupportUs from '@/components/SupportUs.vue';
 import { developerText } from '@/eastereggs';
 
@@ -241,12 +243,14 @@ const recipeTablePageSize = computed({
             <el-form-item :label="$t('developer')">
                 {{ developerText }}
             </el-form-item>
+            <!-- 反饋 / 聊天整列，已依需求移除
             <el-form-item :label="$t('feedback')">
                 <FeedbackEmail @click="openUrl" :version="version" />
                 <el-link @click="openUrl('https://qm.qq.com/q/YMujBifn6G')">
                     QQ群聊
                 </el-link>
             </el-form-item>
+            -->
             <el-form-item :label="$t('source')">
                 <el-link
                     @click="openUrl('https://gitee.com/Tnze/ffxiv-best-craft')"
