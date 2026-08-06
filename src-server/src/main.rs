@@ -54,14 +54,19 @@ struct AppState {
 async fn main() {
     println!("hello, world");
 
-    // parse configs
-    let config_str = std::fs::read_to_string("config.toml").unwrap();
+    // .env 是本機開發用的便利設施；雲端平台直接注入環境變數，沒有這個檔也要能跑
+    dotenvy::dotenv().ok();
+
+    // 設定檔路徑可用環境變數覆寫，容器內就不必把工作目錄切到設定檔旁邊
+    let config_path =
+        env::var("BESTCRAFT_SERVER_CONFIG").unwrap_or_else(|_| "config.toml".to_string());
+    let config_str = std::fs::read_to_string(&config_path)
+        .unwrap_or_else(|err| panic!("failed to read config file {config_path}: {err}"));
     let config: ServerConfig = toml::from_str(&config_str).unwrap();
 
-    // get env vars
-    dotenvy::dotenv().unwrap();
-    let host = env::var("HOST").expect("HOST is not set in .env file");
-    let port = env::var("PORT").expect("PORT is not set in .env file");
+    // HOST 預設綁全介面，否則容器外連不進來；PORT 由平台注入，本機開發沿用 8080
+    let host = env::var("HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
+    let port = env::var("PORT").unwrap_or_else(|_| "8080".to_string());
     let server_url = format!("{host}:{port}");
 
     // create post table if not exists
@@ -83,8 +88,10 @@ async fn main() {
         ])
         .into_handler();
 
+    // health 必須掛在 {lang} 之前，否則會被當成語系參數吃掉
     let router = Router::with_hoop(cors)
         .hoop(affix_state::inject(state))
+        .push(Router::with_path("health").get(health))
         .push(
             Router::with_path("{lang}")
                 .push(Router::with_path("recipe_level_table").get(recipe_level_table))
@@ -105,6 +112,12 @@ async fn main() {
     let listener = TcpListener::new(server_url);
     let acceptor = listener.bind().await;
     Server::new(acceptor).serve(router).await;
+}
+
+// 部署平台用來判定服務是否就緒；不需要語系參數
+#[handler]
+async fn health(res: &mut Response) {
+    res.render(Json(serde_json::json!({ "status": "ok" })));
 }
 
 #[derive(FromQueryResult, Serialize)]

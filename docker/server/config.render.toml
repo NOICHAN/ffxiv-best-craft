@@ -1,0 +1,16 @@
+# Render 部署用的語系→資料庫對應表。
+#
+# 資料庫是建置時由 docker/Dockerfile.server 把 src-tauri/assets/xiv.db
+# COPY 進映像檔的，唯讀開在 /app/xiv.db。與同目錄的 config.toml 差別只在路徑
+# （開發環境是 bind mount 到 /data，正式映像檔是 COPY 到 /app）。
+#
+# 只有 zh-CN，且無法補上其他語系：
+#   1. Items 表只有單一個 Name 欄位（見 src-db/src/items.rs），一份資料庫裝不下多語言。
+#   2. repo 內建的 xiv.db 是簡體中文。
+#   3. src-data 是從本機安裝的 FFXIV 遊戲本體抽資料，而 FFXIV 沒有官方繁體中文客戶端，
+#      所以繁中資料庫產不出來。官方 API 的 zh-TW 是上游自行維護的獨立資料集
+#      （用詞與簡中不同：锻冶↔鍛造、铸甲↔甲冑），不是簡繁字元轉換的結果。
+#
+# 前端向未註冊的語系發請求會拿到 HTTP 400，這是預期行為。
+[lang.zh-CN]
+database = "sqlite:/app/xiv.db?mode=ro"
