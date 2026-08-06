@@ -40,12 +40,6 @@ const dark = useDark();
     font-size: x-large;
     vertical-align: middle;
     /* vertical-align: baseline; */
-
-    /* 底座的幾何先在這裡定好（邊框透明），讓 normal 與其他狀態切換時
-       不會因為多出邊框與內距而位移 */
-    padding: 0 8px;
-    border: 1px solid transparent;
-    border-radius: var(--el-border-radius-round);
 }
 
 #text {
@@ -58,25 +52,9 @@ const dark = useDark();
     color: var(--el-text-color-primary);
 } */
 
-/* 遊戲製作狀態是語意色，色相必須保留，但 red/black/blue/darkblue/purple…
-   這些 CSS 具名色在深色底上最低只有 1.06:1。比照 D8 的做法，把圖示畫在
-   固定底座 --tnze-bar-track 上並以 --tnze-bar-outline 描邊：底座對兩套
-   主題的表面都由描邊負責 3:1，狀態色只要對底座達 3:1 即可，因此深淺兩套
-   主題可以共用同一組色（token 見 theme.css 的 --tnze-cond-*）。 */
-#icon.good,
-#icon.excellent,
-#icon.poor,
-#icon.centered,
-#icon.sturdy,
-#icon.pliant,
-#icon.malleable,
-#icon.primed,
-#icon.goodomen,
-#icon.robust {
-    background-color: var(--tnze-bar-track);
-    border-color: var(--tnze-bar-outline);
-}
-
+/* 狀態色改讀 --tnze-cond-*（見 theme.css）。淺色主題的 token 值就是原本的
+   CSS 具名色，外觀完全不變；深色主題另有一組提亮版，解決 black/darkblue/
+   purple 在深色底上只有 1.06:1 而消失的問題。 */
 .good {
     color: var(--tnze-cond-red);
 }
@@ -126,6 +104,7 @@ const dark = useDark();
 
 .centered {
     color: var(--tnze-cond-yellow);
+    text-shadow: 0px 0px 10px var(--tnze-bar-track);
 }
 
 .sturdy {

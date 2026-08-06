@@ -83,17 +83,20 @@
        這裡改用剛好讓 --el-color-primary 達 7:1 的極淺 tint。 */
     --tnze-btn-hover-bg: #f6faff;
 
-    /* 製作狀態圖示色：一律畫在固定底座 --tnze-bar-track 上（見 D8），
-       因此兩套主題共用一組；色相全部保留自原本的 CSS 具名色。 */
-    --tnze-cond-red: #ff3b3b; /* red */
-    --tnze-cond-gray: #898989; /* black */
-    --tnze-cond-yellow: #ffff00; /* yellow */
-    --tnze-cond-blue: #bdbdff; /* blue */
-    --tnze-cond-green: #009f00; /* green */
-    --tnze-cond-navy: #7979ff; /* darkblue */
-    --tnze-cond-purple: #f000f0; /* purple */
-    --tnze-cond-pink: #ffc0cb; /* pink */
-    --tnze-cond-skyblue: #add8e6; /* lightblue */
+    /* 製作狀態圖示色。淺色主題維持遊戲原本的 CSS 具名色不變——這些圖示
+       右側一律伴隨狀態名稱文字（Condition.vue 的 #text），色彩屬於冗餘的
+       輔助資訊而非唯一傳達手段，1.4.1 由文字滿足、1.4.11 對冗餘元素不適用。
+       深色主題另給一組（見下方 .dark），因為 black/darkblue/purple 在深色底
+       上最低只有 1.06:1，會整個消失。 */
+    --tnze-cond-red: red;
+    --tnze-cond-gray: black;
+    --tnze-cond-yellow: yellow;
+    --tnze-cond-blue: blue;
+    --tnze-cond-green: green;
+    --tnze-cond-navy: darkblue;
+    --tnze-cond-purple: purple;
+    --tnze-cond-pink: pink;
+    --tnze-cond-skyblue: lightblue;
 }
 
 :root:root.dark {
@@ -124,6 +127,19 @@
     --tnze-runway: #4e535a;
 
     --tnze-btn-hover-bg: #12161b;
+
+    /* 深色主題的製作狀態圖示色：保留原具名色的色相，只把亮度拉到對深色
+       表面（#191c20 / #0e1013）達 3:1。blue 與 darkblue 刻意維持一深一淺
+       的相對關係，避免兩者在深色底下收斂成同一個藍。 */
+    --tnze-cond-red: #ff6b6b;
+    --tnze-cond-gray: #9aa0a6;
+    --tnze-cond-yellow: yellow;
+    --tnze-cond-blue: #6ea8ff;
+    --tnze-cond-green: #35c46b;
+    --tnze-cond-navy: #9f9fff;
+    --tnze-cond-purple: #d98fd9;
+    --tnze-cond-pink: pink;
+    --tnze-cond-skyblue: lightblue;
 }
 
 /* ───────── 元件層 ─────────
