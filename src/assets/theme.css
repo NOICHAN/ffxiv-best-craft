@@ -66,3 +66,41 @@ html.dark {
 
     --tnze-bar-outline: #9aa1aa;
 }
+
+/* 實心按鈕：鮮豔填色 + 深色文字；邊界由 1px 邊框負責，
+   因為「配深字達 7:1」與「對白底達 3:1」在數學上互斥 */
+.el-button--primary {
+    --el-button-bg-color: var(--tnze-fill-primary);
+    --el-button-text-color: var(--tnze-on-fill);
+    --el-button-border-color: var(--el-border-color);
+    --el-button-hover-text-color: var(--tnze-on-fill);
+    --el-button-active-text-color: var(--tnze-on-fill);
+}
+.el-button--success {
+    --el-button-bg-color: var(--tnze-fill-success);
+    --el-button-text-color: var(--tnze-on-fill);
+    --el-button-border-color: var(--el-border-color);
+    --el-button-hover-text-color: var(--tnze-on-fill);
+    --el-button-active-text-color: var(--tnze-on-fill);
+}
+.el-button--warning {
+    --el-button-bg-color: var(--tnze-fill-warning);
+    --el-button-text-color: var(--tnze-on-fill);
+    --el-button-border-color: var(--el-border-color);
+    --el-button-hover-text-color: var(--tnze-on-fill);
+    --el-button-active-text-color: var(--tnze-on-fill);
+}
+.el-button--danger {
+    --el-button-bg-color: var(--tnze-fill-danger);
+    --el-button-text-color: var(--tnze-on-fill);
+    --el-button-border-color: var(--el-border-color);
+    --el-button-hover-text-color: var(--tnze-on-fill);
+    --el-button-active-text-color: var(--tnze-on-fill);
+}
+.el-button--info {
+    --el-button-bg-color: var(--tnze-fill-info);
+    --el-button-text-color: var(--tnze-on-fill);
+    --el-button-border-color: var(--el-border-color);
+    --el-button-hover-text-color: var(--tnze-on-fill);
+    --el-button-active-text-color: var(--tnze-on-fill);
+}
