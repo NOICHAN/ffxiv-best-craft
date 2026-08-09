@@ -84,6 +84,33 @@ resolveRowFor(job) 的規則，由上而下第一個成立者勝出
 是合法且會被記住的，而且它是**活的參照**——之後改預設列的數值，該職業會跟著變。
 
 規則 3 保留 `Designer.vue` 現有的行為，作為「沒選過」時的預設。
+使用者為某個職業改過裝備屬性頁上該職業那一列的數值後，開該職業的配方就自動吃到新數值，
+不需要任何額外操作——這是絕大多數使用者唯一會走到的路徑。
+
+### 兩個實作時必須守住的不變式
+
+**一、`resolveRowFor` 只能收真正的 job，絕不可以收 `displayJob`。**
+
+`Page.vue` 提供的 `displayJobKey` 是
+`computed(() => designerStore.content?.job ?? Jobs.Culinarian)`——自訂配方時它會**假裝成烹調師**，
+那個 fallback 只是給動作圖示、動作面板之類的呈現用途。
+若拿它去解析配裝，自訂配方會靜默套用「烹調師」那一列而不是「預設」列，
+而且畫面上完全看不出來。
+
+`Designer.vue` 現有的 `selectDefaultGearset()` 是靠開頭那句
+`if (props.isCustomRecipe) { gearsetId.value = 0; return; }` 擋住這件事的。
+改寫後的呼叫端一律傳 `props.isCustomRecipe ? undefined : displayJob.value`，
+讓規則 0 接手，不要在呼叫端各自複製這個 early return。
+
+**二、只有使用者主動選擇才寫入 `byJob`，自動解析的結果絕不回寫。**
+
+規則 3 解析出來的結果如果被寫回 `byJob`，「這個職業沒選過」這個狀態就永遠消失了，
+之後使用者調整某列的適配職業或刪掉某列時，規則 2 會拿著一個當初自動填進去的 id
+把規則 3 蓋掉，行為看起來像是憑空凍結在舊選擇上。
+
+寫入時機只有一個：`AttrEnhSelector` 的 `gearsetId` model 因**使用者操作**而改變。
+元件掛載時的初始解析、以及 `$subscribe` 守衛觸發的重新解析，都只更新元件內的
+`gearsetId` ref，不碰 store。
 
 ### 決策二：獨立 store，不動 `gearsets.json`
 
@@ -117,13 +144,20 @@ resolveRowFor(job) 的規則，由上而下第一個成立者勝出
 `simplify` 的 gate 不可省——`AttrEnhSelector` 就是用 `simplify` 渲染 `Gearset` 的，
 少了它開關會跑進模擬器的配裝對話框裡。
 
-**開關開啟時選擇器的行為**：選擇器**不停用**，仍可操作，但會顯示提示說明目前一律使用預設；
-使用者若在此改選其他配裝，就**關掉** `alwaysUseDefault` 並記錄該選擇。
-理由是「使用者的直接操作勝過全域開關」，而且提示已經先講明白，不是靜默的狀態變更。
-若改成停用選擇器，使用者會停在一個沒有出口的畫面上——他得自己想到要離開製作介面、
-走到裝備屬性頁去關掉開關。
+**開關開啟時選擇器的行為**：選擇器**停用**，旁邊顯示提示，並在提示裡直接放一個
+「改用各職業配裝」的按鈕，按下去就地關掉 `alwaysUseDefault`，使用者不必離開製作介面。
+
+先前考慮過「選擇器不停用，改選就自動關掉開關」，**這個做法是錯的**：
+關掉開關的同時，另外七個職業會一起從「預設」跳回各自的專屬列或規則 3 的結果。
+使用者以為自己只動了金工師，實際上八個職業的行為全變了，而且畫面上不會告訴他。
+狀態的改變必須由使用者明確按下按鈕，不能當成改選配裝的副作用。
 
 關掉 `alwaysUseDefault` **不會**清空 `byJob`，所以再打開、再關掉之後個別選擇都還在。
+
+「大部分職業用預設，只有某一個職業特別」這種混合需求**不另外設計機制**：
+把開關關掉，再為想用預設的那些職業各自在下拉裡選「預設」即可——
+「預設」列相容全部職業，這條路本來就通。為了省下這幾次點擊而讓開關與個別記憶
+變成互相覆蓋的兩層優先序，不值得。
 
 ### 決策四：刪掉 `Page.vue` 的挑選邏輯，而不是修補它
 
@@ -149,18 +183,20 @@ resolveRowFor(job) 的規則，由上而下第一個成立者勝出
 ## 資料流
 
 ```
-使用者在製作介面選配裝
+使用者在製作介面選配裝（唯一會寫入 byJob 的路徑）
   → AttrEnhSelector 更新 v-model:gearset-id
   → Designer / Simulator 寫進 gearset-selection store（byJob[job] = id）
   → App.vue 的 $subscribe → writeJson('gearset-selection.json', toJson)
 
-使用者在裝備屬性頁切「所有職業都使用這組屬性」
-  → 同一個 store 的 alwaysUseDefault
+使用者切換 alwaysUseDefault（兩個入口，同一個狀態）
+  → 裝備屬性頁「預設」分頁的開關
+  → 或製作介面提示裡的「改用各職業配裝」按鈕（只能關、不能開）
   → 同上寫回
 
 開啟製作介面
-  → Designer / Simulator 呼叫 resolveRowFor(job)
-  → 規則 0~4 解析出該用哪一列 → attributes computed → 模擬／求解
+  → Designer / Simulator 呼叫 resolveRowFor(isCustomRecipe ? undefined : job)
+  → 規則 0~4 解析出該用哪一列 → 只寫進元件內的 gearsetId ref，不碰 store
+  → attributes computed → 模擬／求解
 ```
 
 ## 錯誤處理
@@ -182,6 +218,12 @@ resolveRowFor(job) 的規則，由上而下第一個成立者勝出
 改寫時那個守衛（只在目前選擇已消失／不再相容時才重新解析）必須原樣保留。
 `Simulator` 現在也有同一個面板（`applyGearsetLevel`），改動後兩邊都要驗。
 
+**等級不足面板的「套用」會寫進目前解析出來的那一列。** `alwaysUseDefault` 開啟時，
+解析結果是「預設」列，所以按下去改的是預設列的等級，**八個職業一起受影響**。
+這是正確的行為（那確實是使用者當下在用的配裝），但面板上必須顯示配裝名稱讓使用者看得出來——
+`LevelRequirementPanel` 已經有 `gearset-name` prop，把 `currentGearsetName` 傳對即可，
+不需要新的 UI。實作時確認這個 prop 在兩個模式下都指向真正被解析出來的那一列。
+
 ## i18n
 
 需要新增字串，四個語系（`zh-CN`、`zh-TW`、`en-US`、`ja-JP`）都要齊：
@@ -191,6 +233,7 @@ resolveRowFor(job) 的規則，由上而下第一個成立者勝出
 | `Gearset.vue` | `always-use-default` | 開關標籤 |
 | `Gearset.vue` | `always-use-default-hint` | 開關下方說明 |
 | `AttrEnhSelector.vue` | `gearset-locked-to-default` | 開關開啟時選擇器旁的提示 |
+| `AttrEnhSelector.vue` | `switch-to-per-job-gearset` | 提示裡那顆就地關掉開關的按鈕 |
 
 `Simulator.vue` 的 `meal-and-potion` 四語系已存在，解除註解可直接用，不需新增。
 
