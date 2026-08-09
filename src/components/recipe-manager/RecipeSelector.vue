@@ -175,7 +175,8 @@ const {
 // 因此下游一律用鬆散的 `== undefined`（同時涵蓋 null 與 undefined）判斷「未填」。
 // store 的四個欄位同樣一律以 null 表示「未填」，與此慣例一致。
 // 難度查詢用的是防抖後的值，避免打字過程中每一個中間值都觸發一輪查詢。
-// 帶進 ConfirmDialog 的仍是未防抖的 syncLevel（點進配方時早已停止輸入）。
+// 與 ConfirmDialog 共用的則是未防抖的 syncLevel 本身，且是雙向的：在對話框裡改
+// 同步等級會直接寫回這裡，篩選列的欄位、難度欄與持久化都會跟著更新。
 const debouncedSyncLevel = refDebounced(syncLevel, syncLevelDelayMs);
 // 難度對照表：key 為配方 id，value 為算好的難度；查不到的列在畫面上顯示「—」或「…」
 const difficultyMap = ref<Map<number, number>>(new Map());
@@ -566,7 +567,7 @@ function toggleRecipeFavorite(row: RecipeInfo) {
             :item-info="itemInfo"
             :collectability="collectability"
             :stellarSteadyHandCount="stellarSteadyHandCount"
-            :sync-level="syncLevel"
+            v-model:sync-level="syncLevel"
         />
         <el-input
             v-model="searchText"
@@ -623,8 +624,8 @@ function toggleRecipeFavorite(row: RecipeInfo) {
                 </el-form-item>
                 <!--
                     max=100 取的是目前遊戲的職業等級上限。
-                    注意：ConfirmDialog.vue 對應的同步等級輸入框只有 :min="1"、
-                    沒有上限，等級上限提升時兩處會漂移，請一併檢查。
+                    注意：ConfirmDialog.vue 對應的同步等級輸入框與此共用同一個值，
+                    上下界必須一致，等級上限提升時請一併檢查。
                 -->
                 <el-form-item>
                     <!--
