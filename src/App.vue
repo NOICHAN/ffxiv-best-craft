@@ -45,6 +45,7 @@ import useSettingsStore from '@/stores/settings';
 import useGearsetsStore from '@/stores/gearsets';
 import useDesignerStore from '@/stores/designer';
 import useRecipeFavoritesStore from '@/stores/recipe-favorites';
+import useRecipeFiltersStore from '@/stores/recipe-filters';
 import { elementPlusLang, languages } from './lang';
 import { selectLanguage } from './fluent';
 import { useRouter } from 'vue-router';
@@ -58,6 +59,7 @@ const settingsStore = useSettingsStore();
 const gearsetsStore = useGearsetsStore();
 const designerStore = useDesignerStore();
 const recipeFavoritesStore = useRecipeFavoritesStore();
+const recipeFiltersStore = useRecipeFiltersStore();
 const preferredLang = usePreferredLanguages();
 const bgColor = useCssVar('--app-bg-color', ref(null));
 const bgMicaColor = useCssVar('--tnze-mica-bg-color', ref(null));
@@ -87,7 +89,8 @@ async function loadStorages() {
     let settingsJson: Promise<string> | string | null,
         gearsetsJson: Promise<string> | string | null,
         designerJson: Promise<string> | string | null,
-        recipeFavoritesJson: Promise<string> | string | null;
+        recipeFavoritesJson: Promise<string> | string | null,
+        recipeFiltersJson: Promise<string> | string | null;
     if (isTauri) {
         const { BaseDirectory, readTextFile } = await pkgTauriFs;
         const options = { baseDir: BaseDirectory.AppData };
@@ -95,6 +98,7 @@ async function loadStorages() {
         gearsetsJson = readTextFile('gearsets.json', options);
         designerJson = readTextFile('designer.json', options);
         recipeFavoritesJson = readTextFile('recipe-favorites.json', options);
+        recipeFiltersJson = readTextFile('recipe-filters.json', options);
     } else {
         settingsJson = window.localStorage.getItem('settings.json');
         gearsetsJson = window.localStorage.getItem('gearsets.json');
@@ -102,12 +106,14 @@ async function loadStorages() {
         recipeFavoritesJson = window.localStorage.getItem(
             'recipe-favorites.json',
         );
+        recipeFiltersJson = window.localStorage.getItem('recipe-filters.json');
     }
     for (const v of [
         { dst: settingsStore.fromJson, src: settingsJson },
         { dst: gearsetsStore.fromJson, src: gearsetsJson },
         { dst: designerStore.fromJson, src: designerJson },
         { dst: recipeFavoritesStore.fromJson, src: recipeFavoritesJson },
+        { dst: recipeFiltersStore.fromJson, src: recipeFiltersJson },
     ]) {
         if (v.src === null) continue;
         try {
@@ -160,6 +166,9 @@ onMounted(async () => {
     );
     recipeFavoritesStore.$subscribe(() =>
         writeJson('recipe-favorites.json', recipeFavoritesStore.toJson),
+    );
+    recipeFiltersStore.$subscribe(() =>
+        writeJson('recipe-filters.json', recipeFiltersStore.toJson),
     );
 });
 
