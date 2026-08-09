@@ -143,7 +143,7 @@ resolveRowFor(job) 的規則，由上而下第一個成立者勝出
 | `src/components/designer/Page.vue` | 刪 `gearset` / `attributes` computed 與兩個 prop；改傳 `:is-custom-recipe` 給 Simulator |
 | `src/components/designer/Simulator.vue` | 自己持有 `gearsetId`；解除 `el-dialog` 註解；新增 `isCustomRecipe` prop |
 | `src/components/designer/Designer.vue` | `selectDefaultGearset()` 改呼叫共用 getter；使用者選擇時寫回 store |
-| `src/components/designer/tabs/AttrEnhSelector.vue` | 選到配裝時通知上層寫回記憶；`alwaysUseDefault` 開啟時顯示提示 |
+| `src/components/designer/tabs/AttrEnhSelector.vue` | 只加 `alwaysUseDefault` 開啟時的提示。寫回記憶不必動它——它已經是 `defineModel('gearsetId')`，父層（Designer / Simulator）從 v-model 就看得到變更 |
 | `src/components/Gearset.vue` | 「預設」分頁新增 `alwaysUseDefault` 開關與說明 |
 
 ## 資料流
