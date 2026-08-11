@@ -172,7 +172,8 @@ resolveRowFor(job) 的規則，由上而下第一個成立者勝出
 
 | 檔案 | 改什麼 |
 |---|---|
-| `src/stores/gearset-selection.ts`（新增） | 狀態、`toJson` / `fromJson`、`resolveRowFor` getter、`select` / `setAlwaysUseDefault` action |
+| `src/stores/gearset-selection.ts`（新增） | 狀態、`toJson` / `fromJson`、`resolveRowFor` getter、`select` action |
+| `src/composables/useGearsetResolution.ts`（新增） | **實作時追加。** 把兩個元件的解析接線（`gearsetId` ref、可寫的 `gearsetIdModel`、`$subscribe` 守衛、解析結果 id 的 watcher、相容配裝清單）收成一份，避免兩份副本各自演化 |
 | `src/App.vue` | 掛上 `gearset-selection.json`（比照既有四個 store） |
 | `src/components/designer/Page.vue` | 刪 `gearset` / `attributes` computed 與兩個 prop；改傳 `:is-custom-recipe` 給 Simulator |
 | `src/components/designer/Simulator.vue` | 自己持有 `gearsetId`；解除 `el-dialog` 註解；新增 `isCustomRecipe` prop |
@@ -244,3 +245,21 @@ resolveRowFor(job) 的規則，由上而下第一個成立者勝出
 
 關鍵驗收：**同一個配方分別用求解器與模擬器開啟，屬性列顯示的數值必須一致。**
 這是整個設計的目的，也是最容易在改動中回歸的一條。
+
+## 實作時發現、超出原設計的三件事
+
+1. **`StatusBar.vue` 從未 emit 過 `click-attributes`。** `Simulator.vue` 那行監聽是死的，
+   所以就算解除對話框的註解，使用者仍然打不開。已補上 emit 與 optional 的
+   `attributesClickable` prop（Designer 用同一支元件但不監聽，無條件加游標提示會是誤導），
+   並補鍵盤可及性（`role` / `tabindex` / keydown）——那是模擬器開啟對話框的唯一入口。
+
+2. **模擬器改配裝後畫面數字不動。** `currentStatus` 是 `initStatus` 的一次性快照；
+   改動前配裝在模擬器裡不可能變，這條路徑從沒被踩到。已在屬性變動的 watch 內
+   一併重設 `currentStatus`、`preview` 並清空動作佇列（換裝後原動作串的 CP 與進展都不再成立）。
+   刻意不呼叫既有的 `restart()`，因為它會把狀態推進 `results` 留下一筆假成績。
+
+3. **等級不足面板的配裝下拉是規則的第三個繞道。** 它不受 `alwaysUseDefault` 管制，
+   在那裡改選會讓元件的 `gearsetId` 偏離 `resolveRowFor`，兩個模式再度不一致。
+   已讓相容配裝清單在「開關開啟」與「自訂配方」兩種情況都回傳 `undefined`，
+   面板的 `v-if` 會整塊隱藏該下拉（使用者仍有「直接改等級」與「前往配裝頁」兩條路）。
+   同時讓模擬器也傳這份清單給面板，兩個模式的面板從此對稱。

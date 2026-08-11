@@ -37,8 +37,11 @@ const props = defineProps<{
     have: number;
     // 目前使用中的配裝顯示名稱
     gearsetName: string;
-    // 可切換的相容配裝清單。Simulator 沒有配裝選擇狀態，不傳這個 prop，
-    // 屆時下拉整塊不顯示。
+    // 可切換的相容配裝清單。Designer 與 Simulator 都會傳，兩邊的值都來自
+    // useGearsetResolution 的 compatibleGearsets。
+    // undefined 表示這個入口在目前狀態下不適用（自訂配方，或使用者開啟了
+    // 「所有職業都使用預設」——此時解析結果不受選擇影響，提供下拉只會讓
+    // 兩個模式再度算出不同的配裝），屆時下拉整塊不顯示。
     gearsets?: GearsetsRow[];
     // 目前選中的配裝 id，與 gearsets 同進同退
     gearsetId?: number;
