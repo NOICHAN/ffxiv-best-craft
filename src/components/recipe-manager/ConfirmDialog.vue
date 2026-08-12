@@ -47,11 +47,6 @@ const props = defineProps<{
     itemInfo: Item;
     collectability?: CollectablesShopRefine;
     stellarSteadyHandCount: number;
-    // 外部（配方清單）已填的等級同步值，僅作為 dynRecipeLevel 的初始值帶入，
-    // 使用者在對話框內仍可自由修改，不會回寫給外部。未傳入時行為與過去相同。
-    // 型別含 null：來源是 el-input-number，清空時依 valueOnClear 預設回傳 null 而非
-    // undefined，因此下方一律用鬆散的 `!= undefined`（同時涵蓋 null 與 undefined）。
-    syncLevel?: number | null;
 }>();
 const router = useRouter();
 const { $t } = useFluent();
@@ -60,7 +55,14 @@ const visible = defineModel<boolean>({ required: true });
 const rawRecipe = defineModel<Recipe>('recipe', { required: true });
 const compactLayout = useMediaQuery('screen and (max-width: 500px)');
 
-const dynRecipeLevel = ref<number>();
+// 等級同步值。與配方清單的篩選列共用同一個值（RecipeSelector.vue 以
+// v-model:sync-level 綁到 recipe-filters store），所以在對話框內改動會即時
+// 反映回清單的欄位、也會一併被持久化；反之亦然。
+// 未被父層綁定時（例如收藏頁的 RecipeFavored.vue）defineModel 退化成一般的
+// ref，行為與過去的純內部狀態相同。
+// 型別含 null：來源是 el-input-number，清空時依 valueOnClear 預設回傳 null 而非
+// undefined，因此下方一律用鬆散的 `!= undefined`（同時涵蓋 null 與 undefined）。
+const dynRecipeLevel = defineModel<number | null>('syncLevel');
 const isDynRecipe = computed(() => {
     // 宇宙探索A级以下配方存在等级同步规则
     const notebook = props.recipeInfo.recipe_notebook_list;
@@ -78,7 +80,7 @@ const recipe = computed(() =>
 
 async function loadDynRecipe(
     isDynRecipe: boolean,
-    dynRecipeLevel: number | undefined,
+    dynRecipeLevel: number | null | undefined,
     recipeInfo: RecipeInfo,
     abortSignal: AbortSignal,
 ): Promise<Recipe | undefined> {
@@ -101,40 +103,11 @@ async function loadDynRecipe(
     );
 }
 
-// 元件由 v-if="recipe && recipeInfo && itemInfo" 控制，一旦三者皆有值就會保持掛載，
-// 換配方時不一定會重建元件，所以不能只在 ref() 初始化時取用 props.syncLevel 一次。
-// 這裡在「對話框開啟」或「recipeInfo 換掉」時，把外部值重新帶入作為初始值；
-// 使用者在對話框開著的期間自行修改 dynRecipeLevel 不會被這裡覆蓋。
-//
-// 必須 immediate：元件掛載當下 visible 已經是 true（父層那五個 ref 在同一個微任務
-// 內賦值，Vue 只 flush 一次 render，v-if 轉真那次渲染時 modelValue 就已為 true），
-// watch source 的初值即為 [true, recipeInfo]，非 immediate 的 watch 在整個 app
-// session 的第一次開啟不會觸發。
-//
-// 必須判斷 props.syncLevel != undefined：外部沒有提供同步等級時（例如收藏頁的
-// RecipeFavored.vue 就不傳這個 prop），不該把使用者上次在對話框內填的值清掉——
-// 元件是永久存活的，清掉等於每次開啟都要重打一次，且收藏頁沒有清單層的欄位可補救。
-watch(
-    [visible, () => props.recipeInfo],
-    ([isVisible]) => {
-        if (isVisible && props.syncLevel != undefined) {
-            dynRecipeLevel.value = props.syncLevel;
-        }
-    },
-    { immediate: true },
-);
-
-// 也必須 immediate。上面那個 watch 的 immediate callback 在 setup 期間就「同步」
-// 把 dynRecipeLevel 設成外部值了，而本 watch 註冊在它之後——建立時 seed 的舊值
-// 就已經是那個外部值，之後沒有任何 dep 會再變動，非 immediate 的話這個 callback
-// 永遠不會執行：dynRecipe 恆為 undefined，確認鈕被 :disabled 鎖死，
+// 必須 immediate：元件由 v-if="recipe && recipeInfo && itemInfo" 控制，一旦三者皆有值
+// 就會保持掛載，而 dynRecipeLevel 在 setup 當下就已經帶著父層的值（defineModel 直接
+// 讀 prop，不需要另一個 watch 去 seed）。若不是 immediate，掛載時三個 dep 都不會變動，
+// 這個 callback 永遠不會執行：dynRecipe 恆為 undefined、確認鈕被 :disabled 鎖死，
 // 使用者看到輸入框有值卻仍報「請輸入同步等級」，比不帶入更難理解。
-//
-// 刻意選 immediate 而非「把這個 watch 移到上面那個之前」：後者能生效純粹是靠
-// 註冊順序，日後有人調整順序就會靜默壞掉（同一種隱性耦合）。加 immediate 則
-// 在兩種順序下都正確——若本 watch 反而排在前面，immediate 這次會以
-// dynRecipeLevel == undefined 執行（loadDynRecipe 立即回傳 undefined、不發任何
-// 請求），之後上面那個 watch 寫入外部值時 dep 變動會再觸發一次，結果相同。
 watch(
     [isDynRecipe, dynRecipeLevel, () => props.recipeInfo],
     async ([isDynRecipe, dynRecipeLevel, recipeInfo]) => {
@@ -205,10 +178,16 @@ async function confirm(mode: 'simulator' | 'designer') {
                 :label="$t('sync-level')"
                 :span="3"
             >
+                <!--
+                    max 取的是目前遊戲的職業等級上限，與 RecipeSelector.vue 篩選列
+                    那個同步等級輸入框一致——兩者現在共用同一個值，界線若不同，
+                    在其中一邊填得出、另一邊顯示卻被夾住的數字，等級上限提升時請一併檢查。
+                -->
                 <el-input-number
                     style="margin-left: 14px"
                     v-model="dynRecipeLevel"
                     :min="1"
+                    :max="100"
                 />
             </el-descriptions-item>
 

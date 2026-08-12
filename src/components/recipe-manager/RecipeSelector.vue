@@ -50,11 +50,13 @@ import {
 } from '@/libs/Craft';
 import { useRouter } from 'vue-router';
 import { useFluent } from 'fluent-vue';
+import { storeToRefs } from 'pinia';
 import { CraftType, DataSource, DataSourceType } from '@/datasource/source';
 import useSettingsStore from '@/stores/settings';
 import { refDebounced, useMediaQuery } from '@vueuse/core';
 import ConfirmDialog from './ConfirmDialog.vue';
 import useRecipeFavoritesStore from '@/stores/recipe-favorites';
+import useRecipeFiltersStore from '@/stores/recipe-filters';
 
 const searchingDelayMs = 200;
 // 同步等級輸入的防抖時間。打「90」會依序產生 9 → 90 兩個值，若不防抖，
@@ -156,18 +158,25 @@ const pagination = reactive({
 const displayTable = ref<RecipeInfo[]>([]);
 const isRecipeTableLoading = ref(false);
 const compactLayout = useMediaQuery('screen and (max-width: 500px)');
-const filterCraftType = ref<number>();
-const filterLevel = ref<number>();
 const craftTypeOptions = ref<CraftType[]>([]);
-const filterRecipeLevel = ref<number>();
 const stellarSteadyHandCount = ref<number>(0);
+// 篩選列的四個欄位改由 recipe-filters store 持有，持久化交給 App.vue 的既有機制
+// （網頁版落在 localStorage、桌面版落在 AppData 檔案），使用者重開就能帶回上次的條件。
+// storeToRefs 解構時改回原本的變數名，讓檔案其餘部分不必跟著改。
+const {
+    craftType: filterCraftType,
+    level: filterLevel,
+    recipeLevel: filterRecipeLevel,
+    syncLevel,
+} = storeToRefs(useRecipeFiltersStore());
 // 等級同步：月球（宇宙探索）配方的難度取決於此值，未填時該類配方的難度欄顯示為「—」
 // 此控制項不觸發搜尋，只影響難度欄的顯示。
 // 型別含 null：el-input-number 清空時依 valueOnClear 預設回傳 null 而非 undefined，
 // 因此下游一律用鬆散的 `== undefined`（同時涵蓋 null 與 undefined）判斷「未填」。
-const syncLevel = ref<number | null>();
+// store 的四個欄位同樣一律以 null 表示「未填」，與此慣例一致。
 // 難度查詢用的是防抖後的值，避免打字過程中每一個中間值都觸發一輪查詢。
-// 帶進 ConfirmDialog 的仍是未防抖的 syncLevel（點進配方時早已停止輸入）。
+// 與 ConfirmDialog 共用的則是未防抖的 syncLevel 本身，且是雙向的：在對話框裡改
+// 同步等級會直接寫回這裡，篩選列的欄位、難度欄與持久化都會跟著更新。
 const debouncedSyncLevel = refDebounced(syncLevel, syncLevelDelayMs);
 // 難度對照表：key 為配方 id，value 為算好的難度；查不到的列在畫面上顯示「—」或「…」
 const difficultyMap = ref<Map<number, number>>(new Map());
@@ -182,8 +191,19 @@ const recipeFavoritesStore = useRecipeFavoritesStore();
 
 async function craftTypeRemoteMethod() {
     const source = await settingStore.getDataSource();
-    filterCraftType.value = undefined;
-    craftTypeOptions.value = await source.craftTypeList();
+    const options = await source.craftTypeList();
+    craftTypeOptions.value = options;
+    // 只有在「目前選的職業不在新選項裡」時才清空，這條規則同時服務兩個呼叫點：
+    // onMounted 時保留剛從 store 帶回來的值；切換資料來源／語系時，舊的 craftType
+    // id 對不上新選項就自然被清掉。
+    // 判斷刻意放在載入選項「之後」——原本無條件清在 await 之前，除了會清掉還原值，
+    // 也讓畫面在載入中先閃一下空值。
+    if (
+        filterCraftType.value != undefined &&
+        !options.some(v => v.id == filterCraftType.value)
+    ) {
+        filterCraftType.value = null;
+    }
 }
 
 let loadRecipeTableResult: Promise<{
@@ -201,8 +221,9 @@ async function updateRecipePage(
         let promise = dataSource.recipeTable(
             pageNumber,
             searching,
-            filterRecipeLevel.value,
-            filterCraftType.value,
+            // store 用 null 表示「未填」，而這裡的參數是 `?: number`，故轉成 undefined
+            filterRecipeLevel.value ?? undefined,
+            filterCraftType.value ?? undefined,
             filterLevel.value ? filterLevel.value * 10 - 9 : undefined,
             filterLevel.value ? filterLevel.value * 10 : undefined,
             settingStore.recipeTablePageSize,
@@ -260,6 +281,23 @@ async function triggerSearch() {
 onMounted(async () => {
     triggerSearch();
     craftTypeRemoteMethod();
+});
+
+// 三個會影響查詢的篩選欄位變動時重新搜尋。這裡用 watch 而不是模板上的 @change，
+// 是因為要同時涵蓋兩條路徑：使用者操作，以及從 store 非同步還原的值——後者不會
+// 觸發 @change（持久化的值是由 App.vue 的 loadStorages() 灌進 store 的，
+// 時間點與本元件的 onMounted 沒有保證的先後關係）。
+// 模板上原本那三個 @change="triggerSearch" 一併移除，否則使用者操作會搜兩次。
+//
+// 已知取捨：還原比本元件 onMounted 晚時，開頁會多發一次查詢（onMounted 一次、
+// 還原後 watch 再一次）。網頁版實測是還原先到（路由元件延遲載入，比 loadStorages
+// 慢），只發一次；桌面版讀檔是真的 IO，可能落在另一邊。沒存過篩選的使用者一律
+// 不受影響——fromJson 根本不會被呼叫，值沒變、watch 不觸發。
+//
+// syncLevel 刻意不在這個 watch 裡：它不觸發搜尋，只影響難度欄，
+// 走既有的 refDebounced → loadDifficulties 路徑。
+watch([filterCraftType, filterLevel, filterRecipeLevel], () => {
+    triggerSearch();
 });
 
 watch(
@@ -529,7 +567,7 @@ function toggleRecipeFavorite(row: RecipeInfo) {
             :item-info="itemInfo"
             :collectability="collectability"
             :stellarSteadyHandCount="stellarSteadyHandCount"
-            :sync-level="syncLevel"
+            v-model:sync-level="syncLevel"
         />
         <el-input
             v-model="searchText"
@@ -554,7 +592,6 @@ function toggleRecipeFavorite(row: RecipeInfo) {
                         v-model="filterCraftType"
                         clearable
                         :remote-method="craftTypeRemoteMethod"
-                        @change="triggerSearch"
                     >
                         <el-option
                             v-for="{ id, name } in craftTypeOptions"
@@ -565,11 +602,7 @@ function toggleRecipeFavorite(row: RecipeInfo) {
                     </el-select>
                 </el-form-item>
                 <el-form-item :label="$t('level')">
-                    <el-select
-                        v-model="filterLevel"
-                        @change="triggerSearch"
-                        clearable
-                    >
+                    <el-select v-model="filterLevel" clearable>
                         <el-option
                             v-for="i in 10"
                             :key="i"
@@ -587,13 +620,12 @@ function toggleRecipeFavorite(row: RecipeInfo) {
                         :step="1"
                         step-strictly
                         :controls="false"
-                        @change="triggerSearch"
                     />
                 </el-form-item>
                 <!--
                     max=100 取的是目前遊戲的職業等級上限。
-                    注意：ConfirmDialog.vue 對應的同步等級輸入框只有 :min="1"、
-                    沒有上限，等級上限提升時兩處會漂移，請一併檢查。
+                    注意：ConfirmDialog.vue 對應的同步等級輸入框與此共用同一個值，
+                    上下界必須一致，等級上限提升時請一併檢查。
                 -->
                 <el-form-item>
                     <!--
