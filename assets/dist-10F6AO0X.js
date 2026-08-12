@@ -1,0 +1,1 @@
+import{p as e}from"./dist-B0Pc-_8x.js";export{e as useClipboard};

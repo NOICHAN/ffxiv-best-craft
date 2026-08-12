@@ -1,0 +1,2 @@
+function e(e,t){if(e<1e3)return e+`ms`;{let n=Math.floor(e/1e3/3600),r=Math.floor(e/1e3/60)-n*60,i=(e/1e3-n*3600-r*60).toFixed(t??3);return(n>0?n+`h`:``)+(r>0?r+`m`:``)+(i+`s`)}}function t(e){window.clarity&&window.clarity(`event`,e)}async function n(e){window.open(e,`_blank`)}export{e as n,n as r,t};
+//# sourceMappingURL=Utils-BrVsjK-A.js.map

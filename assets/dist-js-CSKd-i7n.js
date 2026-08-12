@@ -1,0 +1,2 @@
+import{i as e}from"./core-zgBH5Y7V.js";import"./image-fTTglIGF.js";async function t(t,n){await e(`plugin:clipboard-manager|write_text`,{label:n?.label,text:t})}export{t as writeText};
+//# sourceMappingURL=dist-js-CSKd-i7n.js.map
