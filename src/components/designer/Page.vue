@@ -35,12 +35,10 @@ import {
     provide,
     onActivated,
 } from 'vue';
-import useGearsetsStore from '@/stores/gearsets';
 import useDesignerStore from '@/stores/designer';
 import { useFluent } from 'fluent-vue';
 import { displayJobKey } from './injectionkeys';
 import { Jobs } from '@/libs/Craft';
-import { GearsetsRow } from '@/libs/Gearsets';
 import { useRouter } from 'vue-router';
 import { isTauri } from '@/libs/Consts';
 
@@ -48,7 +46,6 @@ const emit = defineEmits<{
     (e: 'setTitle', title: string): void;
 }>();
 
-const gearsetsStore = useGearsetsStore();
 const designerStore = useDesignerStore();
 const { $t } = useFluent();
 
@@ -62,17 +59,6 @@ const Designer = defineAsyncComponent(() => import('./Designer.vue'));
 const Simulator = defineAsyncComponent(() => import('./Simulator.vue'));
 
 const isCustomRecipe = computed(() => designerStore.content?.job === undefined);
-// 回傳整列而非只有 value：Simulator 的等級不足面板需要知道要把新等級寫回哪一列
-const gearset = computed<GearsetsRow>(() => {
-    const job = designerStore.content?.job;
-    if (job == undefined) return gearsetsStore.default;
-    return (
-        gearsetsStore.gearsets.find((v: GearsetsRow) =>
-            v.compatibleJobs.includes(job),
-        ) ?? gearsetsStore.default
-    );
-});
-const attributes = computed(() => gearset.value.value);
 
 provide(
     displayJobKey,
@@ -205,8 +191,7 @@ async function copyDetail() {
                 :item="designerStore.content.item"
                 :recipe="designerStore.content.recipe"
                 :collectable-shop-refine="designerStore.content.collectability"
-                :attributes="attributes"
-                :gearset-id="gearset.id"
+                :is-custom-recipe="isCustomRecipe"
             />
         </template>
         <el-empty

@@ -1,0 +1,265 @@
+# 製作介面的配裝挑選 Design
+
+日期：2026-08-09
+
+## 問題
+
+同一個配方在兩個製作模式下會套用**不同的**裝備屬性，而且模擬器模式套用的那一組是錯的。
+
+`src/components/designer/Page.vue` 的 `gearset` computed 這樣挑配裝：
+
+```ts
+gearsetsStore.gearsets.find(v => v.compatibleJobs.includes(job))
+```
+
+第 0 列（「預設」）的 `compatibleJobs` 含全部八個職業（見 `src/stores/gearsets.ts` 的 `state()`），
+所以 `.find()` 永遠第一個就命中它。已用瀏覽器實測確認：把九列配裝的 CP 設成 500~508 後，
+八個職業全部解析到 `id=0 CP=500`。
+
+對照 `Designer.vue` 的 `selectDefaultGearset()`，同樣的需求就有寫 `i != 0`，解析結果各自正確。
+
+**影響**：走模擬器模式（`designerStore.content.simulatorMode === true`）時，
+不論配方是什麼職業，一律套用「預設」分類的屬性；使用者為木工師／烹調師各別設定的
+作業精度、加工精度、CP 全都不生效。Simulator 顯示的配裝名稱、以及等級不足面板
+「套用」寫回的目標列，也都指向預設那列。
+
+### 連帶發現：模擬器模式沒有配裝選擇器
+
+`Simulator.vue` 裡那個 `AttrEnhSelector` 對話框是**被註解掉**的，而
+`@click-attributes="openAttrEnhSelector = true"` 還留著——點屬性列只會設一個沒人讀的 flag，
+畫面上什麼都不會發生。食藥加成連帶完全無法使用（`attributesEnhancers` 永遠是空陣列）。
+
+git 追下來是**程式碼腐化而非產品決策**：上游 `3e53eb5` 先把 `<AttrEnhSelector>` 註解掉留一個空對話框，
+`f91cb72` 再把整個對話框註解掉。時間點正好在 `AttrEnhSelector` 多了 required 的 `gearsetId` model 之後，
+而 Simulator 的 `gearsetId` 是唯讀 prop，給不出來。沒有任何註解說明這是刻意停用。
+
+### 為什麼不能只補 `i != 0`
+
+`src/stores/gearsets.ts` 的 `state()` 會**預先**幫八個職業各建一列並填入 `DEFAULT_ATTRIBUTS`。
+因此「只編輯過預設列、沒碰過職業列」的使用者，他的木工師那列裝的是**過期的出廠數字**。
+單純補上 `i != 0` 會讓這群人的數值直接倒退，而且模擬器模式沒有選擇器，他們無從改回來。
+
+兩派使用者的需求都是合理的：有人所有職業共用一組裝備，有人每個職業各有一套。
+真正的缺陷是**介面從來沒給過使用者表達這件事的地方**。
+
+## 目標
+
+1. 兩個製作模式對同一個配方解析出**相同**的配裝。
+2. 使用者能表達「這個職業用哪一列」，並且被記住。
+3. 使用者能一次表達「所有職業都用預設」，不必逐職業設定八次。
+
+## 非目標（本次不做）
+
+- **食藥加成不持久化**。`attributesEnhancers` 維持元件內 `ref`。食藥是每次製作的臨時決定，
+  且遊戲改版後清單會變，記住舊選擇的價值低於它帶來的困惑。
+- **自訂配方不提供配裝選擇器**。`AttrEnhSelector` 的選擇器有 `v-if="job != undefined"`，
+  自訂配方本來就沒有；維持現狀一律用「預設」列。
+- **不動 `gearsets` store 的 schema**、不動裝備屬性頁既有的欄位、不動 Rust。
+- **不恢復「繼承自預設」的資料模型**（舊 schema 的 `value?: Attributes`）。
+  那要改 schema 加遷移，而本設計用「選擇 + 記憶」已經涵蓋同樣的使用情境。
+  `Gearset.vue` 裡四個語系那組沒人用的 `inherit-from-default` 字串維持原樣，不刪也不用。
+
+## 架構
+
+### 決策一：挑選規則收斂成單一真相來源
+
+現在兩個模式各寫各的挑選邏輯，這就是它們會不一致的原因。新設計讓兩邊呼叫同一個 getter。
+
+```
+resolveRowFor(job) 的規則，由上而下第一個成立者勝出
+
+  0. job == undefined（自訂配方）        → 「預設」列
+  1. alwaysUseDefault 為 true            → 「預設」列
+  2. byJob[job] 有記憶，且該列仍存在、
+     且其 compatibleJobs 仍含 job        → 該列
+  3. 第一個相容的「非預設」列
+     （i != 0 && compatibleJobs 含 job）  → 該列
+  4. 以上皆無                            → 「預設」列
+```
+
+規則 2 的「仍相容」檢查不能省：使用者可以在裝備屬性頁改一列的適配職業，也可以刪掉一列，
+記憶會因此失效，此時必須乾淨地退回規則 3 而不是報錯或卡住。
+
+規則 2 同時也是「習慣用預設」那派的出口：「預設」列相容全部職業，所以幫某個職業選「預設」
+是合法且會被記住的，而且它是**活的參照**——之後改預設列的數值，該職業會跟著變。
+
+規則 3 保留 `Designer.vue` 現有的行為，作為「沒選過」時的預設。
+使用者為某個職業改過裝備屬性頁上該職業那一列的數值後，開該職業的配方就自動吃到新數值，
+不需要任何額外操作——這是絕大多數使用者唯一會走到的路徑。
+
+### 兩個實作時必須守住的不變式
+
+**一、`resolveRowFor` 只能收真正的 job，絕不可以收 `displayJob`。**
+
+`Page.vue` 提供的 `displayJobKey` 是
+`computed(() => designerStore.content?.job ?? Jobs.Culinarian)`——自訂配方時它會**假裝成烹調師**，
+那個 fallback 只是給動作圖示、動作面板之類的呈現用途。
+若拿它去解析配裝，自訂配方會靜默套用「烹調師」那一列而不是「預設」列，
+而且畫面上完全看不出來。
+
+`Designer.vue` 現有的 `selectDefaultGearset()` 是靠開頭那句
+`if (props.isCustomRecipe) { gearsetId.value = 0; return; }` 擋住這件事的。
+改寫後的呼叫端一律傳 `props.isCustomRecipe ? undefined : displayJob.value`，
+讓規則 0 接手，不要在呼叫端各自複製這個 early return。
+
+**二、只有使用者主動選擇才寫入 `byJob`，自動解析的結果絕不回寫。**
+
+規則 3 解析出來的結果如果被寫回 `byJob`，「這個職業沒選過」這個狀態就永遠消失了，
+之後使用者調整某列的適配職業或刪掉某列時，規則 2 會拿著一個當初自動填進去的 id
+把規則 3 蓋掉，行為看起來像是憑空凍結在舊選擇上。
+
+寫入時機只有一個：`AttrEnhSelector` 的 `gearsetId` model 因**使用者操作**而改變。
+元件掛載時的初始解析、以及 `$subscribe` 守衛觸發的重新解析，都只更新元件內的
+`gearsetId` ref，不碰 store。
+
+### 決策二：獨立 store，不動 `gearsets.json`
+
+新增 `src/stores/gearset-selection.ts`（pinia id `gearset-selection`，檔名 `gearset-selection.json`）：
+
+```ts
+{
+    alwaysUseDefault: boolean,              // 預設 false
+    byJob: Partial<Record<Jobs, number>>,   // 職業 → 配裝 id
+}
+```
+
+沿用專案既有的持久化慣例（store 出 `toJson` / `fromJson`，`App.vue` 讀檔灌入並 `$subscribe` 寫回），
+因此網頁版落在 localStorage、桌面版落在 AppData。
+
+**刻意不塞進 `gearsets` store**：`GearsetsStoreSchema` 是 `additionalProperties: false`，
+一旦多存一個欄位，使用者若拿到舊版 bundle（網頁版有 `coi-serviceworker` 快取，這是真的會發生的）
+驗證就會整包失敗，**八列裝備屬性全部歸零**。配裝數值是使用者最不能掉的資料，
+不值得為了省一個檔案冒這個險。獨立檔案壞掉最多就是選擇記憶回到規則 3。
+
+`resolveRowFor` 放在這個 store 的 getter 裡，內部呼叫 `useGearsetsStore()` 取得列表，
+呼叫端因此不必自己傳 gearsets，也不可能各自寫出不同版本的規則。
+
+### 決策三：「所有職業都使用這組屬性」開關放在裝備屬性頁的「預設」分頁
+
+放在使用者正在看「預設」那一頁的地方，不必跑去設定頁找；順帶回答了
+「預設這一列到底什麼用」這個介面上從來沒說清楚的問題。新增職業列也自動適用。
+
+`Gearset.vue` 已有 `v-if="!simplify && store.gearsets[index].id != 0"` 的區塊放名稱與適配職業，
+新增一個互補的 `v-if="!simplify && store.gearsets[index].id == 0"` 區塊放這個開關。
+`simplify` 的 gate 不可省——`AttrEnhSelector` 就是用 `simplify` 渲染 `Gearset` 的，
+少了它開關會跑進模擬器的配裝對話框裡。
+
+**開關開啟時選擇器的行為**：選擇器**停用**，旁邊顯示提示，並在提示裡直接放一個
+「改用各職業配裝」的按鈕，按下去就地關掉 `alwaysUseDefault`，使用者不必離開製作介面。
+
+先前考慮過「選擇器不停用，改選就自動關掉開關」，**這個做法是錯的**：
+關掉開關的同時，另外七個職業會一起從「預設」跳回各自的專屬列或規則 3 的結果。
+使用者以為自己只動了金工師，實際上八個職業的行為全變了，而且畫面上不會告訴他。
+狀態的改變必須由使用者明確按下按鈕，不能當成改選配裝的副作用。
+
+關掉 `alwaysUseDefault` **不會**清空 `byJob`，所以再打開、再關掉之後個別選擇都還在。
+
+「大部分職業用預設，只有某一個職業特別」這種混合需求**不另外設計機制**：
+把開關關掉，再為想用預設的那些職業各自在下拉裡選「預設」即可——
+「預設」列相容全部職業，這條路本來就通。為了省下這幾次點擊而讓開關與個別記憶
+變成互相覆蓋的兩層優先序，不值得。
+
+### 決策四：刪掉 `Page.vue` 的挑選邏輯，而不是修補它
+
+`Page.vue` 是路由分派層，本來就不該決定用哪一列配裝。
+`gearset` 與 `attributes` 兩個 computed 連同傳給 `Simulator` 的 `:attributes` / `:gearset-id`
+一併移除，改由 `Simulator` 自己解析——與 `Designer` 的結構對齊。
+`Simulator` 因此需要新的 `isCustomRecipe` prop（`Designer` 已經有了）。
+
+那個有問題的 `find` 是被**刪除**而不是打補丁，缺陷沒有留下第二個藏身處。
+
+## 元件改動
+
+| 檔案 | 改什麼 |
+|---|---|
+| `src/stores/gearset-selection.ts`（新增） | 狀態、`toJson` / `fromJson`、`resolveRowFor` getter、`select` action |
+| `src/composables/useGearsetResolution.ts`（新增） | **實作時追加。** 把兩個元件的解析接線（`gearsetId` ref、可寫的 `gearsetIdModel`、`$subscribe` 守衛、解析結果 id 的 watcher、相容配裝清單）收成一份，避免兩份副本各自演化 |
+| `src/App.vue` | 掛上 `gearset-selection.json`（比照既有四個 store） |
+| `src/components/designer/Page.vue` | 刪 `gearset` / `attributes` computed 與兩個 prop；改傳 `:is-custom-recipe` 給 Simulator |
+| `src/components/designer/Simulator.vue` | 自己持有 `gearsetId`；解除 `el-dialog` 註解；新增 `isCustomRecipe` prop |
+| `src/components/designer/Designer.vue` | `selectDefaultGearset()` 改呼叫共用 getter；使用者選擇時寫回 store |
+| `src/components/designer/tabs/AttrEnhSelector.vue` | 只加 `alwaysUseDefault` 開啟時的提示。寫回記憶不必動它——它已經是 `defineModel('gearsetId')`，父層（Designer / Simulator）從 v-model 就看得到變更 |
+| `src/components/Gearset.vue` | 「預設」分頁新增 `alwaysUseDefault` 開關與說明 |
+
+## 資料流
+
+```
+使用者在製作介面選配裝（唯一會寫入 byJob 的路徑）
+  → AttrEnhSelector 更新 v-model:gearset-id
+  → Designer / Simulator 寫進 gearset-selection store（byJob[job] = id）
+  → App.vue 的 $subscribe → writeJson('gearset-selection.json', toJson)
+
+使用者切換 alwaysUseDefault（兩個入口，同一個狀態）
+  → 裝備屬性頁「預設」分頁的開關
+  → 或製作介面提示裡的「改用各職業配裝」按鈕（只能關、不能開）
+  → 同上寫回
+
+開啟製作介面
+  → Designer / Simulator 呼叫 resolveRowFor(isCustomRecipe ? undefined : job)
+  → 規則 0~4 解析出該用哪一列 → 只寫進元件內的 gearsetId ref，不碰 store
+  → attributes computed → 模擬／求解
+```
+
+## 錯誤處理
+
+`fromJson` 用 `try/catch` 包住 `JSON.parse` 並 `console.error`，解析失敗就維持預設值——
+與 `src/stores/recipe-favorites.ts` 同樣的做法。逐欄正規化：
+`alwaysUseDefault` 不是 boolean 就當 false，`byJob` 只收「key 是合法 `Jobs`、value 是 number」的項目。
+
+不引入 ajv schema：這份資料壞掉的最差後果只是選擇記憶失效、退回規則 3，不會讓頁面壞掉，
+也沒有跨版本遷移需求。`gearsets` 那種 schema 驗證是因為它有真實的遷移歷史。
+
+**`resolveRowFor` 必須對任何 store 狀態都回得出一列**——`gearsets[0]` 永遠存在
+（`delGearset` 在 `Gearsets.vue` 被擋掉，id 0 不可刪），規則 4 因此永遠有解。
+
+## 既有陷阱，改動時不可弄丟
+
+`Designer.vue:108-121` 的 `$subscribe` 有段註解說明：等級不足面板按「套用」會寫入 gearsets store，
+早期版本會因此把剛選好的配裝打回預設，導致**面板永遠關不掉**。
+改寫時那個守衛（只在目前選擇已消失／不再相容時才重新解析）必須原樣保留。
+`Simulator` 現在也有同一個面板（`applyGearsetLevel`），改動後兩邊都要驗。
+
+**等級不足面板的「套用」會寫進目前解析出來的那一列。** `alwaysUseDefault` 開啟時，
+解析結果是「預設」列，所以按下去改的是預設列的等級，**八個職業一起受影響**。
+這是正確的行為（那確實是使用者當下在用的配裝），但面板上必須顯示配裝名稱讓使用者看得出來——
+`LevelRequirementPanel` 已經有 `gearset-name` prop，把 `currentGearsetName` 傳對即可，
+不需要新的 UI。實作時確認這個 prop 在兩個模式下都指向真正被解析出來的那一列。
+
+## i18n
+
+需要新增字串，四個語系（`zh-CN`、`zh-TW`、`en-US`、`ja-JP`）都要齊：
+
+| 元件 | key | 用途 |
+|---|---|---|
+| `Gearset.vue` | `always-use-default` | 開關標籤 |
+| `Gearset.vue` | `always-use-default-hint` | 開關下方說明 |
+| `AttrEnhSelector.vue` | `gearset-locked-to-default` | 開關開啟時選擇器旁的提示 |
+| `AttrEnhSelector.vue` | `switch-to-per-job-gearset` | 提示裡那顆就地關掉開關的按鈕 |
+
+`Simulator.vue` 的 `meal-and-potion` 四語系已存在，解除註解可直接用，不需新增。
+
+## 測試
+
+專案沒有測試框架（無 vitest、無 playwright、無 `#[cfg(test)]`），CI 只做 build 與 type-check。
+驗證方式是型別檢查 + 格式化 + 手動情境，情境清單放在實作計畫裡。
+
+關鍵驗收：**同一個配方分別用求解器與模擬器開啟，屬性列顯示的數值必須一致。**
+這是整個設計的目的，也是最容易在改動中回歸的一條。
+
+## 實作時發現、超出原設計的三件事
+
+1. **`StatusBar.vue` 從未 emit 過 `click-attributes`。** `Simulator.vue` 那行監聽是死的，
+   所以就算解除對話框的註解，使用者仍然打不開。已補上 emit 與 optional 的
+   `attributesClickable` prop（Designer 用同一支元件但不監聽，無條件加游標提示會是誤導），
+   並補鍵盤可及性（`role` / `tabindex` / keydown）——那是模擬器開啟對話框的唯一入口。
+
+2. **模擬器改配裝後畫面數字不動。** `currentStatus` 是 `initStatus` 的一次性快照；
+   改動前配裝在模擬器裡不可能變，這條路徑從沒被踩到。已在屬性變動的 watch 內
+   一併重設 `currentStatus`、`preview` 並清空動作佇列（換裝後原動作串的 CP 與進展都不再成立）。
+   刻意不呼叫既有的 `restart()`，因為它會把狀態推進 `results` 留下一筆假成績。
+
+3. **等級不足面板的配裝下拉是規則的第三個繞道。** 它不受 `alwaysUseDefault` 管制，
+   在那裡改選會讓元件的 `gearsetId` 偏離 `resolveRowFor`，兩個模式再度不一致。
+   已讓相容配裝清單在「開關開啟」與「自訂配方」兩種情況都回傳 `undefined`，
+   面板的 `v-if` 會整塊隱藏該下拉（使用者仍有「直接改等級」與「前往配裝頁」兩條路）。
+   同時讓模擬器也傳這份清單給面板，兩個模式的面板從此對稱。

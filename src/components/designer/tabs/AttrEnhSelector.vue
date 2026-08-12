@@ -26,6 +26,8 @@ import {
     ElSpace,
     ElSelect,
     ElOption,
+    ElButton,
+    ElText,
 } from 'element-plus';
 import {
     onMounted,
@@ -41,6 +43,7 @@ import { useFluent } from 'fluent-vue';
 import { Attributes, Jobs } from '@/libs/Craft';
 import settingStore from '@/stores/settings';
 import useGearsetsStore from '@/stores/gearsets';
+import useGearsetSelection from '@/stores/gearset-selection';
 import { DataSource } from '@/datasource/source';
 import AttrEnhSelectorOption from './AttrEnhSelectorOption.vue';
 import { choiceGearsetDisplayName, GearsetsRow } from '@/libs/Gearsets';
@@ -52,6 +55,7 @@ const Gearset = defineAsyncComponent(() => import('@/components/Gearset.vue'));
 const { $t } = useFluent();
 const setting = settingStore();
 const gearsets = useGearsetsStore();
+const selection = useGearsetSelection();
 const meals = ref<Enhancer[]>();
 const medicine = ref<Enhancer[]>();
 const mealSearchKeyword = ref('');
@@ -247,7 +251,10 @@ function EnhIncComponent(props: {
         <template v-if="job != undefined">
             <el-divider />
             <el-form-item :label="$t('select-gearset')">
-                <el-select v-model="selectedGearset">
+                <el-select
+                    v-model="selectedGearset"
+                    :disabled="selection.alwaysUseDefault"
+                >
                     <el-option
                         v-for="gearset in gearsetsList"
                         :key="gearset.id"
@@ -255,6 +262,26 @@ function EnhIncComponent(props: {
                         :value="gearset.id"
                     />
                 </el-select>
+            </el-form-item>
+            <!--
+                開關開啟時停用下拉，但必須在原地給出口——否則使用者得自己想到要離開
+                製作介面、走到裝備屬性頁去關掉它。
+                刻意不做成「改選配裝就自動關掉開關」：那會連帶讓另外七個職業一起從
+                「預設」跳回各自的專屬列，使用者以為只動了一個職業，實際上八個都變了。
+            -->
+            <el-form-item v-if="selection.alwaysUseDefault">
+                <el-text size="small" type="info">
+                    {{ $t('gearset-locked-to-default') }}
+                </el-text>
+                <el-button
+                    class="item"
+                    size="small"
+                    link
+                    type="primary"
+                    @click="selection.alwaysUseDefault = false"
+                >
+                    {{ $t('switch-to-per-job-gearset') }}
+                </el-button>
             </el-form-item>
             <Gearset
                 v-if="selectedGearsetIndex != -1"
@@ -291,6 +318,8 @@ meal = 食物
 medicine = 药水
 soul-of-the-crafter = 专家之证
 select-gearset = 选择配装
+gearset-locked-to-default = 当前所有职业都使用「默认」配装。
+switch-to-per-job-gearset = 改用各职业配装
 </fluent>
 
 <fluent locale="zh-TW">
@@ -298,6 +327,8 @@ meal = 食物
 medicine = 藥水
 soul-of-the-crafter = 專家之證
 select-gearset = 選擇配裝
+gearset-locked-to-default = 目前所有職業都使用「預設」配裝。
+switch-to-per-job-gearset = 改用各職業配裝
 </fluent>
 
 <fluent locale="en-US">
@@ -305,6 +336,8 @@ meal = Meal
 medicine = Potion
 soul-of-the-crafter = Soul of the Crafter
 select-gearset = Select gearset
+gearset-locked-to-default = Every job is currently using the Default gearset.
+switch-to-per-job-gearset = Use per-job gearsets
 </fluent>
 
 <fluent locale="ja-JP">
@@ -312,4 +345,6 @@ meal = 調理品
 medicine = 薬品
 soul-of-the-crafter = マイスターの証
 select-gearset = ギアセットを選択
+gearset-locked-to-default = 現在、すべてのクラスが「デフォルト」ギアセットを使用しています。
+switch-to-per-job-gearset = クラスごとのギアセットを使う
 </fluent>

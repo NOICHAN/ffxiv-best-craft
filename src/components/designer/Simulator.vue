@@ -46,19 +46,16 @@ import ActionQueueVue from './ActionQueue.vue';
 import AttrEnhSelector from './tabs/AttrEnhSelector.vue';
 import { displayJobKey } from './injectionkeys';
 import useStore from '@/stores/designer';
-import useGearsetsStore from '@/stores/gearsets';
-import { choiceGearsetDisplayName, GearsetsRow } from '@/libs/Gearsets';
+import { useGearsetResolution } from '@/composables/useGearsetResolution';
 import LevelRequirementPanel from './LevelRequirementPanel.vue';
 
 const props = defineProps<{
     recipe: Recipe;
     item: Item;
-    attributes: Attributes;
-    gearsetId: number;
     collectableShopRefine?: CollectablesShopRefine;
+    isCustomRecipe: boolean;
 }>();
 const store = useStore();
-const gearsetsStore = useGearsetsStore();
 const displayJob = inject(displayJobKey) as Ref<Jobs>;
 
 interface Slot {
@@ -67,9 +64,30 @@ interface Slot {
     condition: Conditions;
 }
 
+// 装备属性
+// 傳給 resolveRowFor 的必須是真正的配方職業。displayJob 在自訂配方時會
+// 假裝成烹調師（見 Page.vue 的 displayJobKey provide），直接拿去解析
+// 會靜默套用「烹調師」那一列。
+const resolveJob = computed(() =>
+    props.isCustomRecipe ? undefined : displayJob.value,
+);
+// 解析接線與 Designer 共用同一份實作，兩個模式才不會對同一個配方算出
+// 不同的配裝。這段必須在下方 top-level await 之前（也必須在
+// enhancedAttributes 之前——它會解構 attributes.value），內部的
+// $subscribe 與 watch 才會綁進本元件的 effect scope。
+const {
+    gearsetId,
+    gearsetRow,
+    gearsetName,
+    attributes,
+    gearsetIdModel,
+    selectGearset,
+    compatibleGearsets,
+} = useGearsetResolution(resolveJob);
+
 const attributesEnhancers = ref<Enhancer[]>([]);
 const enhancedAttributes = computed<Attributes>(() => {
-    let { level, craftsmanship, control, craft_points } = props.attributes;
+    let { level, craftsmanship, control, craft_points } = attributes.value;
     const sum = (prev: number, curr: number) => prev + curr;
     craftsmanship += attributesEnhancers.value
         .filter(v => v.cm && v.cm_max)
@@ -112,18 +130,11 @@ function attributesForSimulation(
     return attrs.level >= minLevel ? attrs : { ...attrs, level: minLevel };
 }
 
-const currentGearsetRow = computed(
-    () =>
-        gearsetsStore.gearsets.find(
-            (v: GearsetsRow) => v.id == props.gearsetId,
-        ) ?? gearsetsStore.default,
-);
-const currentGearsetName = computed(() =>
-    choiceGearsetDisplayName(currentGearsetRow.value),
-);
-
+// 攔阻面板的「套用」：直接改寫 gearsets store 中該列的等級。
+// 這會觸發 composable 內的 $subscribe，但那裡已加了「仍相容就不動」的判斷，
+// gearsetId 不會被重設，enhancedAttributes 因此重算、面板隨即消失。
 function applyGearsetLevel(level: number) {
-    currentGearsetRow.value.value.level = level;
+    gearsetRow.value.value.level = level;
 }
 
 const initStatus = ref<Status>({
@@ -134,6 +145,15 @@ const initStatus = ref<Status>({
     )),
     quality: 0,
 });
+const currentStatus = ref<Status>(initStatus.value);
+const seq = ref<Slot[]>([]);
+const openAttrEnhSelector = ref(false);
+const results = ref<Status[]>([]);
+const waiting = ref(false);
+const preview = ref<Status | null>(null);
+const rapidMode = ref(true);
+let timer: any;
+
 watch([props, enhancedAttributes], async ([p, attr]) => {
     initStatus.value = {
         ...(await newStatus(
@@ -143,16 +163,18 @@ watch([props, enhancedAttributes], async ([p, attr]) => {
         )),
         quality: 0,
     };
+    // 換裝備／換配方後，正在進行中的模擬（已消耗的耐久、CP、動作序列）全部
+    // 不再成立，必須重設。不可呼叫 restart()——那會把 currentStatus 記錄進
+    // results，使用者只是換裝備、沒有完成一次製作，不該留下一筆成績。
+    currentStatus.value = initStatus.value;
+    seq.value.splice(0);
+    // 狀態列顯示的是 preview ?? currentStatus，而 preview 是用舊屬性算出來的，
+    // 不清掉會在新屬性下繼續顯示一組對不上的數字。
+    preview.value = null;
+    // results（歷史成績）刻意不清：那是使用者先前真的完成過的製作紀錄，
+    // 換裝備不會讓它們沒發生過。waiting／timer 也不需重設，
+    // 進行中的那一步會自己在 finally 收尾。
 });
-
-const currentStatus = ref<Status>(initStatus.value);
-const seq = ref<Slot[]>([]);
-const openAttrEnhSelector = ref(false);
-const results = ref<Status[]>([]);
-const waiting = ref(false);
-const preview = ref<Status | null>(null);
-const rapidMode = ref(true);
-let timer: any;
 
 const sleep = (t: number) => new Promise(resolve => setTimeout(resolve, t));
 async function pushAction(action: Actions) {
@@ -226,19 +248,22 @@ function leaveAction() {
         v-if="levelShortfall"
         :need="levelShortfall.need"
         :have="levelShortfall.have"
-        :gearset-name="currentGearsetName"
+        :gearset-name="gearsetName"
+        :gearsets="compatibleGearsets"
+        :gearset-id="gearsetId"
         :sync-level="store.content?.syncLevel"
+        @select-gearset="selectGearset"
         @apply-level="applyGearsetLevel"
     />
     <div v-else class="main-page">
-        <!-- <el-dialog v-model="openAttrEnhSelector" :title="$t('meal-and-potion')">
+        <el-dialog v-model="openAttrEnhSelector" :title="$t('meal-and-potion')">
             <AttrEnhSelector
                 v-model="attributesEnhancers"
-                v-model:gearset-id="gearsetId"
+                v-model:gearset-id="gearsetIdModel"
                 :job="isCustomRecipe ? undefined : displayJob"
                 :attributes="attributes"
             />
-        </el-dialog> -->
+        </el-dialog>
         <StatusBarVue
             class="status-bar"
             :attributes="attributes"
@@ -246,6 +271,7 @@ function leaveAction() {
             :status="preview ?? currentStatus"
             :show-condition="true"
             :collectableShopRefine="collectableShopRefine"
+            :attributesClickable="true"
             @click-attributes="openAttrEnhSelector = true"
         />
         <el-scrollbar class="action-queue">

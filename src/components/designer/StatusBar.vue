@@ -37,6 +37,12 @@ const props = defineProps<{
     attributes: Attributes;
     showCondition: boolean;
     collectableShopRefine?: CollectablesShopRefine;
+    // 是否顯示「可點擊屬性區塊」的視覺提示（游標樣式等）。
+    // 這支元件同時被 Designer.vue（未監聽 click-attributes）與
+    // Simulator.vue（有監聽並開啟配裝／食藥對話框）使用，
+    // 若不論有沒有監聽者都套用 cursor: pointer，Designer 那邊
+    // 就會出現「看起來能點但點了沒反應」的假提示，因此需要由呼叫端自行宣告。
+    attributesClickable?: boolean;
 }>();
 
 const qualityProgressBar = ref();
@@ -64,9 +70,7 @@ const progressColor = computed<string>(() => {
 });
 
 const qualityColor = computed<string>(() =>
-    props.status.quality >= props.status.recipe.quality
-        ? '#4ade80'
-        : '#63b0ff',
+    props.status.quality >= props.status.recipe.quality ? '#4ade80' : '#63b0ff',
 );
 
 const craftPointPercentage = computed(() =>
@@ -103,6 +107,23 @@ const collectabilityColor = computed(() => {
 });
 
 const hqPerc = asyncComputed(() => highQualityProbability(props.status), null);
+
+// emit 本身無條件觸發即可：沒有監聽者的元件（例如 Designer.vue）
+// 不會受影響，只是沒有人接收這個事件。
+const emit = defineEmits<{
+    'click-attributes': [];
+}>();
+
+// 鍵盤觸發（Enter／空白）。在模擬器裡這個區塊是開啟配裝／食藥對話框的
+// 唯一入口，沒有這段鍵盤使用者完全打不開。
+// 這裡必須看 attributesClickable：role/tabindex 只在可點擊時才加，
+// 否則 Designer 會多出一個按了沒反應的 tab stop；空白鍵的 preventDefault
+// 同理，不可以在不可點擊時擋掉頁面捲動。
+function onAttributesKeydown(e: KeyboardEvent) {
+    if (!props.attributesClickable) return;
+    e.preventDefault();
+    emit('click-attributes');
+}
 </script>
 
 <template>
@@ -186,7 +207,15 @@ const hqPerc = asyncComputed(() => highQualityProbability(props.status), null);
             />
             <Buffs id="buffs" :buffs="status.buffs" />
         </div>
-        <div id="attributes">
+        <div
+            id="attributes"
+            :class="{ clickable: attributesClickable }"
+            :role="attributesClickable ? 'button' : undefined"
+            :tabindex="attributesClickable ? 0 : undefined"
+            @click="emit('click-attributes')"
+            @keydown.enter="onAttributesKeydown"
+            @keydown.space="onAttributesKeydown"
+        >
             <div class="attr-block">
                 <span class="attr-label">
                     {{ $t('display-attrs-label', { label: $t('level') }) }}
@@ -263,6 +292,13 @@ const hqPerc = asyncComputed(() => highQualityProbability(props.status), null);
     padding: 0px 20px 0px 10px;
     /* flex-grow: 2; */
     color: var(--el-text-color-secondary);
+}
+
+/* 只有呼叫端明確宣告 attributesClickable 時才顯示可點擊提示，
+   避免在沒有監聽 click-attributes 的地方（例如 Designer.vue）
+   出現點了沒反應的假游標 */
+#attributes.clickable {
+    cursor: pointer;
 }
 
 .attr-block {

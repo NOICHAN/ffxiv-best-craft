@@ -51,9 +51,8 @@ import {
 } from '@/libs/Craft';
 import { read_solver } from '@/libs/Solver';
 import { calculateEnhancedAttributsAbs, Enhancer } from '@/libs/Enhancer';
-import { choiceGearsetDisplayName, GearsetsRow } from '@/libs/Gearsets';
 import useDesignerStore from '@/stores/designer';
-import useGearsetsStore from '@/stores/gearsets';
+import { useGearsetResolution } from '@/composables/useGearsetResolution';
 
 import AttrEnhSelector from './tabs/AttrEnhSelector.vue';
 import InitialQualitySetting from './tabs/InitialQualitySetting.vue';
@@ -83,7 +82,6 @@ const props = defineProps<{
 }>();
 
 const store = useDesignerStore();
-const gearsetsStore = useGearsetsStore();
 const { $t } = useFluent();
 const displayJob = inject(displayJobKey) as Ref<Jobs>;
 const foldMultiFunctionArea = useMediaQuery('screen and (max-width: 480px)');
@@ -97,57 +95,24 @@ const actionQueueElem = ref();
 const { height: actionQueueHeight } = useElementSize(actionQueueElem);
 
 // 装备属性
-const gearsetId = ref(0);
-const selectedGearsetRow = computed<GearsetsRow | undefined>(() => {
-    return gearsetsStore.gearsets.find(v => v.id == gearsetId.value);
-});
-const attributes = computed<Attributes>(
-    () => (selectedGearsetRow.value ?? gearsetsStore.default).value,
+// 傳給 resolveRowFor 的必須是真正的配方職業。displayJob 在自訂配方時會
+// 假裝成烹調師（見 Page.vue 的 displayJobKey provide），直接拿去解析
+// 會靜默套用「烹調師」那一列。
+const resolveJob = computed(() =>
+    props.isCustomRecipe ? undefined : displayJob.value,
 );
-// Gearsets changed
-gearsetsStore.$subscribe(() => {
-    // 只有在目前選中的配裝已不存在／不再相容時才重選。
-    // 原本是無條件呼叫 selectDefaultGearset()，會讓使用者在等級不足面板上
-    // 按「套用」改等級（寫入 store）時，剛選好的配裝被打回預設，
-    // 面板因此永遠關不掉。
-    const current = selectedGearsetRow.value;
-    if (
-        current == undefined ||
-        (!props.isCustomRecipe &&
-            !current.compatibleJobs.includes(displayJob.value))
-    ) {
-        selectDefaultGearset();
-    }
-});
-// Recipe changed
-watch(
-    [displayJob, () => props.isCustomRecipe],
-    ([displayJob, isCustomRecipe], old) => {
-        const currentGearset = selectedGearsetRow.value;
-        if (
-            currentGearset == undefined ||
-            currentGearset.id == 0 ||
-            (!isCustomRecipe &&
-                !currentGearset.compatibleJobs.includes(displayJob))
-        ) {
-            // Current selected gearset doesn't fit current recipe
-            selectDefaultGearset();
-        }
-    },
-    { immediate: true },
-);
-
-function selectDefaultGearset() {
-    if (props.isCustomRecipe) {
-        gearsetId.value = 0;
-        return;
-    }
-    const job = displayJob.value;
-    const newGearset = gearsetsStore.gearsets.find(
-        (v, i) => i != 0 && v.compatibleJobs.includes(job),
-    );
-    gearsetId.value = newGearset?.id ?? 0;
-}
+// 解析接線與 Simulator 共用同一份實作，兩個模式才不會對同一個配方
+// 算出不同的配裝。必須在下方 top-level await 之前呼叫，內部的
+// $subscribe 與 watch 才會綁進本元件的 effect scope。
+const {
+    gearsetId,
+    gearsetRow,
+    gearsetName,
+    attributes,
+    gearsetIdModel,
+    selectGearset,
+    compatibleGearsets,
+} = useGearsetResolution(resolveJob);
 
 // 食物和药水效果
 const attributesEnhancers = ref<Enhancer[]>([]);
@@ -212,24 +177,11 @@ function attributesForSimulation(
     return attrs.level >= minLevel ? attrs : { ...attrs, level: minLevel };
 }
 
-// 攔阻面板用：可切換的相容配裝清單
-const compatibleGearsets = computed<GearsetsRow[]>(() =>
-    props.isCustomRecipe
-        ? gearsetsStore.gearsets
-        : gearsetsStore.gearsets.filter((v: GearsetsRow) =>
-              v.compatibleJobs.includes(displayJob.value),
-          ),
-);
-const currentGearsetName = computed(() =>
-    choiceGearsetDisplayName(selectedGearsetRow.value ?? gearsetsStore.default),
-);
-
 // 攔阻面板的「套用」：直接改寫 gearsets store 中該列的等級。
-// 這會觸發上方的 $subscribe，但那裡已加了「仍相容就不動」的判斷，
+// 這會觸發 composable 內的 $subscribe，但那裡已加了「仍相容就不動」的判斷，
 // gearsetId 不會被重設，enhancedAttributes 因此重算、面板隨即消失。
 function applyGearsetLevel(level: number) {
-    const row = selectedGearsetRow.value ?? gearsetsStore.default;
-    row.value.level = level;
+    gearsetRow.value.value.level = level;
 }
 
 // UI States
@@ -394,11 +346,11 @@ async function handleSolverResult(
         v-if="levelShortfall"
         :need="levelShortfall.need"
         :have="levelShortfall.have"
-        :gearset-name="currentGearsetName"
+        :gearset-name="gearsetName"
         :gearsets="compatibleGearsets"
         :gearset-id="gearsetId"
         :sync-level="store.content?.syncLevel"
-        @select-gearset="(id: number) => (gearsetId = id)"
+        @select-gearset="selectGearset"
         @apply-level="applyGearsetLevel"
     />
     <div v-else class="main-page">
@@ -490,7 +442,7 @@ async function handleSolverResult(
                         <el-scrollbar style="flex: auto; padding-left: 30px">
                             <AttrEnhSelector
                                 v-model="attributesEnhancers"
-                                v-model:gearset-id="gearsetId"
+                                v-model:gearset-id="gearsetIdModel"
                                 :job="isCustomRecipe ? undefined : displayJob"
                                 :attributes="attributes"
                             />

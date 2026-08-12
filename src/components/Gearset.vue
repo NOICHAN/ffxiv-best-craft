@@ -24,12 +24,16 @@ import {
     ElInput,
     ElCheckboxGroup,
     ElCheckboxButton,
+    ElSwitch,
+    ElText,
 } from 'element-plus';
 import { Jobs } from '@/libs/Craft';
 import useGearsets from '@/stores/gearsets';
+import useGearsetSelection from '@/stores/gearset-selection';
 import { choiceGearsetDisplayName } from '@/libs/Gearsets';
 
 const store = useGearsets();
+const selection = useGearsetSelection();
 const props = defineProps<{
     index: number;
     simplify?: boolean;
@@ -60,6 +64,19 @@ const props = defineProps<{
                         :value="job"
                     />
                 </el-checkbox-group>
+            </el-form-item>
+        </template>
+        <template v-if="!simplify && store.gearsets[index].id == 0">
+            <el-form-item>
+                <el-switch
+                    v-model="selection.alwaysUseDefault"
+                    :active-text="$t('always-use-default')"
+                />
+            </el-form-item>
+            <el-form-item>
+                <el-text size="small" type="info">
+                    {{ $t('always-use-default-hint') }}
+                </el-text>
             </el-form-item>
         </template>
         <el-form-item :label="$t('level')">
@@ -109,6 +126,8 @@ gearset-name = 配装名称
 job = 适配职业
 attributes = 装备属性
 inherit-from-default = 继承自默认
+always-use-default = 所有职业都使用这组属性
+always-use-default-hint = 开启后，制作界面一律使用这一列。各职业的个别选择会被保留，关闭后重新生效。
 </fluent>
 
 <fluent locale="zh-TW">
@@ -116,6 +135,8 @@ gearset-name = 配裝名稱
 job = 適配職業
 attributes = 裝備屬性
 inherit-from-default = 繼承自預設
+always-use-default = 所有職業都使用這組屬性
+always-use-default-hint = 開啟後，製作介面一律使用這一列。各職業的個別選擇會被保留，關閉後重新生效。
 </fluent>
 
 <fluent locale="en-US">
@@ -123,10 +144,14 @@ gearset-name = Gearset Name
 job = Fit Job
 attributes = Crafter Attributes
 inherit-from-default = Inherit from default
+always-use-default = Use these attributes for every job
+always-use-default-hint = While this is on, the crafting screens always use this row. Per-job choices are kept and take effect again when you turn it off.
 </fluent>
 
 <fluent locale="ja-JP">
 gearset-name = ギアセット名
 attributes = 属性
 inherit-from-default = デフォルトから継承
+always-use-default = すべてのクラスでこの属性を使う
+always-use-default-hint = オンの間、製作画面は常にこの行を使用します。クラスごとの選択は保持され、オフにすると再び有効になります。
 </fluent>
