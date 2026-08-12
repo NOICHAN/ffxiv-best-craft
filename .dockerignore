@@ -1,8 +1,5 @@
-# 兩顆映像檔共用。Dockerfile.dev 不 COPY 任何東西（原始碼靠 bind mount），
-# 這裡對它純粹是避免把幾 GB 的產物送給 Docker daemon 當建置脈絡；
-# 對 Dockerfile.server 則是必要的 —— 那顆會 `COPY . .`。
-#
-# 注意：不能排除 src-tauri/assets/，正式映像檔要的 xiv.db 在裡面。
+# 給 Dockerfile.dev 用。那顆不 COPY 任何東西（原始碼靠 bind mount），
+# 這裡純粹是避免把幾 GB 的產物送給 Docker daemon 當建置脈絡。
 .git
 .github
 node_modules

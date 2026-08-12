@@ -1,6 +1,6 @@
-# 把網頁版部署到 GitHub Pages。
-#
-# 與 build_web.yml 互不影響 —— 那份是上游用 SSH 推到自架站台的流程，只在打 tag 時部署。
+# 把網頁版部署到 GitHub Pages。這個 fork 唯一的 CI/CD 流程 ——
+# 上游的 build_web.yml（SSH 推到自架站台）與 build_tauri.yml（發桌面版 release）
+# 都需要這裡沒有的 secrets，已經移除。
 #
 # 這裡走的是「把產物推到 gh-pages 分支」的舊式發佈管線，而不是
 # actions/deploy-pages 那條新的。原因：新管線在這個 repo 上會把部署卡在

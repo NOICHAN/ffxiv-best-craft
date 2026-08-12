@@ -45,7 +45,7 @@ There is also a containerized web-dev environment (`docker compose -f docker-com
 
 Linting runs automatically inside Vite via `vite-plugin-oxlint`; there is no separate lint script.
 
-There is no test suite (no vitest, no `#[cfg(test)]` modules). CI ([.github/workflows](.github/workflows)) only builds and type-checks.
+There is no test suite (no vitest, no `#[cfg(test)]` modules). The only CI is [deploy_pages.yml](.github/workflows/deploy_pages.yml) — it builds the web edition on every push to `main` and force-pushes the result to the `gh-pages` branch. There is no type-check or lint gate in CI; run `pnpm run fmt` and the type check locally.
 
 Frontend scripts use POSIX env syntax (`VITE_BESTCRAFT_TARGET=tauri vite`); this works on Windows because `shellEmulator: true` is set in [pnpm-workspace.yaml](pnpm-workspace.yaml). Invoke them through pnpm, not directly.
 
